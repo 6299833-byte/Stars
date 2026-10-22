@@ -1,17 +1,15 @@
 <title>Солнечная система</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-  /* Layout: full-bleed orrery canvas; name and date top-left, planet card and time controls at the bottom */
+  /* Layout: full-bleed canvas; name, date and facts top-left; body picker and time controls at the bottom */
   :root {
     --space: #020309;
     --ink: #e6ecff;
-    --muted: rgba(190, 205, 240, 0.6);
-    --chip: rgba(14, 18, 38, 0.74);
+    --muted: rgba(190, 205, 240, 0.62);
+    --chip: rgba(14, 18, 38, 0.9);
     --chip-line: rgba(140, 170, 255, 0.22);
     --chip-on: rgba(255, 190, 90, 0.2);
     --chip-on-line: rgba(255, 205, 130, 0.85);
-    --card: rgba(10, 14, 32, 0.82);
-    --sun: #ffc35a;
     --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
     --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
     color-scheme: dark;
@@ -35,46 +33,48 @@
     top: calc(14px + env(safe-area-inset-top, 0px));
     left: max(16px, env(safe-area-inset-left, 0px));
     right: max(16px, env(safe-area-inset-right, 0px));
+    max-width: 30rem;
     pointer-events: none;
-    display: flex; flex-direction: column; gap: 4px;
+    display: flex; flex-direction: column; gap: 5px;
+    text-shadow: 0 0 8px var(--space);
   }
   .head h1 { margin: 0; font: 500 32px/1 var(--serif); text-wrap: balance; }
-  .head p { margin: 0; font: 11px/1.5 var(--mono); letter-spacing: 0.08em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .head p { margin: 0; font: 11px/1.55 var(--mono); letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .head .note { font: italic 16px/1.35 var(--serif); letter-spacing: 0; color: var(--ink); max-width: 26rem; }
   .bottom {
     position: fixed; left: 0; right: 0; bottom: 0;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding-block: 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
     pointer-events: none;
   }
-  .card {
-    pointer-events: auto;
-    width: 100%; max-width: 26rem; box-sizing: border-box;
-    background: var(--card);
-    border: 1px solid var(--chip-line);
-    border-radius: 14px;
-    padding: 14px 16px;
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    display: flex; flex-direction: column; gap: 10px;
+  .hint {
+    font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center;
+    text-shadow: 0 0 6px var(--space);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
-  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .card h2 { margin: 0; font: 500 26px/1 var(--serif); }
-  .card .close { font: 12px/1 var(--mono); color: var(--muted); background: none; border: 0; padding: 6px; cursor: pointer; }
-  .card dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
-  .card dt { font: 9.5px/1.2 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-  .card dd { margin: 2px 0 0; font: 13px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
-  .card p { margin: 0; font: italic 16px/1.35 var(--serif); color: var(--ink); }
-  .hint { font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center; text-shadow: 0 0 6px var(--space); }
-  .tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: auto; }
-  .tools button {
+  .row {
+    display: flex; gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    pointer-events: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    touch-action: pan-x;
+  }
+  .row::-webkit-scrollbar { display: none; }
+  .row > :first-child { margin-left: auto; }
+  .row > :last-child { margin-right: auto; }
+  .row button {
+    flex: none;
     font: 12px/1 var(--mono); letter-spacing: 0.04em;
     color: var(--ink); background: var(--chip);
     border: 1px solid var(--chip-line); border-radius: 999px;
     padding: 9px 12px; cursor: pointer;
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: inline-flex; align-items: center; gap: 7px;
   }
-  .tools button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
+  .row button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
+  .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400&display=swap">
@@ -82,23 +82,18 @@
 <canvas id="sky"></canvas>
 
 <div class="head">
-  <h1>Солнечная система</h1>
+  <h1 id="title">Солнечная система</h1>
   <p id="date">—</p>
-  <p>Положения планет на эту дату · расстояния и размеры сжаты</p>
+  <p id="sub">Положения планет на эту дату · расстояния и размеры сжаты</p>
+  <p class="note" id="note" hidden></p>
 </div>
 
 <div class="bottom">
-  <section class="card" id="card" hidden aria-live="polite">
-    <div class="card-top">
-      <h2 id="c-name">Земля</h2>
-      <button class="close" id="c-close" aria-label="Закрыть">ЗАКРЫТЬ ✕</button>
-    </div>
-    <dl id="c-facts"></dl>
-    <p id="c-note"></p>
-  </section>
-  <div class="hint" id="hint">НАЖМИ НА ПЛАНЕТУ · ПРОВЕДИ — ПОВЕРНУТЬ · ЩИПОК — МАСШТАБ</div>
-  <div class="tools" role="toolbar" aria-label="Скорость времени">
+  <div class="hint" id="hint">ВЫБЕРИ ПЛАНЕТУ ВНИЗУ ИЛИ НАЖМИ НА НЕЁ</div>
+  <div class="row" id="bodies" role="toolbar" aria-label="Выбор объекта"></div>
+  <div class="row" role="toolbar" aria-label="Скорость времени">
     <button id="s-0" data-speed="0" aria-pressed="false">Пауза</button>
+    <button id="s-h" data-speed="0.0416667" aria-pressed="false">1 час/с</button>
     <button id="s-1" data-speed="1" aria-pressed="false">1 день/с</button>
     <button id="s-10" data-speed="10" aria-pressed="true">10 дней/с</button>
     <button id="s-100" data-speed="100" aria-pressed="false">100 дней/с</button>
@@ -117,68 +112,152 @@
   const pick = a => a[(Math.random() * a.length) | 0];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+  const smooth = x => x * x * (3 - 2 * x);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const mix = (c1, c2, t) => [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+  const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
 
-  let W, H, DPR, zoom0, zoom, small;
+  // ---------- value noise for procedural surfaces ----------
+  function hash(x, y, z) {
+    let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  function vnoise(x, y, z) {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+    const u = smooth(x - xi), v = smooth(y - yi), w = smooth(z - zi);
+    const c = (dx, dy, dz) => hash(xi + dx, yi + dy, zi + dz);
+    const x00 = lerp(c(0, 0, 0), c(1, 0, 0), u), x10 = lerp(c(0, 1, 0), c(1, 1, 0), u);
+    const x01 = lerp(c(0, 0, 1), c(1, 0, 1), u), x11 = lerp(c(0, 1, 1), c(1, 1, 1), u);
+    return lerp(lerp(x00, x10, v), lerp(x01, x11, v), w);
+  }
+  function fbm(x, y, z, oct = 4) {
+    let s = 0, a = 0.5, f = 1, n = 0;
+    for (let i = 0; i < oct; i++) { s += a * vnoise(x * f, y * f, z * f); n += a; a *= 0.5; f *= 2.03; }
+    return s / n;
+  }
+
+  // ---------- 3x3 matrices (row-major) ----------
+  const mul = (A, B) => {
+    const R = new Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+      R[r * 3 + c] = A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c];
+    return R;
+  };
+  const rotY = a => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+  const rotX = a => { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+  // camera: yaw about the vertical, then elevation `tilt` (π/2 = looking straight down). Output: screen x, screen y (down), depth (+ toward viewer)
+  const camM = (yaw, tilt) => {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), ct = Math.cos(tilt), st = Math.sin(tilt);
+    return [cy, 0, -sy, sy * st, -ct, cy * st, sy * ct, st, cy * ct];
+  };
+
+  let W, H, DPR, zoom0, zoom, zoomTarget = 0, small;
   function resize() {
     DPR = Math.min(devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = W * DPR; cv.height = H * DPR;
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     small = Math.min(W, H) < 600;
     const z = Math.min(W, H * 1.4) / 2 / 6.7;
     zoom = zoom0 ? zoom * z / zoom0 : z;
     zoomTarget = zoomTarget ? zoomTarget * z / zoom0 : z;
     zoom0 = z;
+    resetStars();
   }
-  let zoomTarget = 0;
+  const stars = [];
+  function resetStars() {
+    stars.length = 0;
+    for (let i = 0; i < W * H / 1100; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.06 ? 1.4 : 0.7, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
+  }
   addEventListener('resize', resize);
   resize();
 
-  // Real orbit sizes are compressed so Mercury and Neptune fit on one screen
+  // ---------- bodies ----------
+  // Overview distances are compressed so Mercury and Neptune fit on one screen
   const dist = a => 0.95 + 1.3 * Math.log(1 + a * 1.2);
 
-  // Mean longitude at J2000 (deg) and its daily rate: circular-orbit approximation of the real positions
+  // L0/n: mean longitude at J2000 and its daily rate (circular-orbit approximation of the real positions).
+  // rot: sidereal day in Earth days; tiltAx: axial tilt in degrees (over 90° means retrograde spin).
+  // p1: orbital period at 1 planet radius in days, for Keplerian ring speeds.
   const PLANETS = [
     { id: 'mercury', name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.2, col: ['#e6dfd6', '#a79d93', '#4a4440'],
-      facts: [['Диаметр', '4 879 км'], ['От Солнца', '0,39 а. е.'], ['Год', '88 дней'], ['Спутники', '0']],
+      rot: 58.646, tiltAx: 0.03, p1: 0.0705, halo: '190,180,170',
+      facts: 'Диаметр 4 879 км · 0,39 а. е. · год 88 дней · сутки 58,6 земных · спутников нет',
       note: 'Самая маленькая планета. Солнечные сутки на ней длятся 176 земных дней, дольше её года.' },
     { id: 'venus', name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 3.4, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
-      facts: [['Диаметр', '12 104 км'], ['От Солнца', '0,72 а. е.'], ['Год', '225 дней'], ['Спутники', '0']],
+      rot: 243.02, tiltAx: 177.4, p1: 0.0602, halo: '255,220,150',
+      facts: 'Диаметр 12 104 км · 0,72 а. е. · год 225 дней · сутки 243 земных, вращение обратное · спутников нет',
       note: 'Самая горячая планета: под плотными облаками около 465 °C.' },
     { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 3.6, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
-      facts: [['Диаметр', '12 742 км'], ['От Солнца', '1 а. е. = 150 млн км'], ['Год', '365,25 дня'], ['Спутники', '1']],
-      note: 'Единственная известная планета с жизнью. Свет Солнца идёт до неё 8 минут 20 секунд.' },
+      rot: 0.99727, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
+      facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
+      note: 'Единственная известная планета с жизнью. На ночной стороне видны огни городов.',
+      moons: [{ name: 'Луна', a: 60.3, P: 27.32, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
     { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 2.8, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
-      facts: [['Диаметр', '6 779 км'], ['От Солнца', '1,52 а. е.'], ['Год', '687 дней'], ['Спутники', '2']],
-      note: 'Здесь гора Олимп, высочайший вулкан Солнечной системы, около 22 км.' },
+      rot: 1.02596, tiltAx: 25.19, p1: 0.0694, halo: '255,150,110',
+      facts: 'Диаметр 6 779 км · 1,52 а. е. · год 687 дней · сутки 24 ч 37 мин · наклон оси 25,2° · 2 спутника',
+      note: 'Здесь гора Олимп, высочайший вулкан Солнечной системы, около 22 км.',
+      moons: [{ name: 'Фобос', a: 2.76, P: 0.319, size: 0.05, col: ['#d8c8b8', '#8a7868', '#2a2018'] },
+              { name: 'Деймос', a: 6.92, P: 1.263, size: 0.04, col: ['#e0d0c0', '#9a8878', '#2a2018'] }] },
     { id: 'jupiter', name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 8, col: ['#fff0dc', '#d9b38c', '#5e4026'],
-      facts: [['Диаметр', '139 820 км'], ['От Солнца', '5,2 а. е.'], ['Год', '11,9 лет'], ['Спутники', '95']],
-      note: 'Большое Красное Пятно — шторм шире всей Земли, бушующий сотни лет.' },
+      rot: 0.41354, tiltAx: 3.13, p1: 0.1235, halo: '255,210,160',
+      rings: [[1.72, 1.81, 0.12, ['#8a6a50', '#a88a6a']], [1.4, 1.71, 0.05, ['#6a5040']]],
+      facts: 'Диаметр 139 820 км · 5,2 а. е. · год 11,9 лет · сутки 9 ч 56 мин · 95 спутников',
+      note: 'Большое Красное Пятно — шторм шире всей Земли. Четыре крупных спутника открыл Галилей в 1610 году.',
+      moons: [{ name: 'Ио', a: 5.9, P: 1.769, size: 0.065, col: ['#fff6b0', '#e0c050', '#5a4010'] },
+              { name: 'Европа', a: 9.4, P: 3.551, size: 0.055, col: ['#ffffff', '#d9cbb0', '#4a4030'] },
+              { name: 'Ганимед', a: 15.0, P: 7.155, size: 0.09, col: ['#e8e0d4', '#a89c8c', '#302820'] },
+              { name: 'Каллисто', a: 26.3, P: 16.69, size: 0.085, col: ['#cfc4b8', '#7d6e60', '#241c16'] }] },
     { id: 'saturn', name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 7, col: ['#fff6dc', '#e3c98f', '#6a5326'],
-      facts: [['Диаметр', '116 460 км'], ['От Солнца', '9,5 а. е.'], ['Год', '29,5 лет'], ['Спутники', '274']],
-      note: 'Плотность меньше, чем у воды. Кольца в поперечнике около 280\u00a0000 км и состоят в основном изо льда.' },
+      rot: 0.44401, tiltAx: 26.73, p1: 0.1747, halo: '255,225,160',
+      // D, C, B, Cassini Division, A, F rings, in planet radii
+      rings: [[1.11, 1.24, 0.08, ['#7a6a55']], [1.24, 1.53, 0.35, ['#9c8a6c', '#b8a582', '#8a7a62']],
+              [1.53, 1.95, 1.0, ['#fff3d6', '#f0dcae', '#e8d3a2', '#ffffff', '#d9bf8c']], [1.95, 2.03, 0.06, ['#8a7a62']],
+              [2.03, 2.27, 0.6, ['#e8d8b4', '#d6c39a', '#c9ad78', '#f5ead0']], [2.32, 2.335, 0.12, ['#ffffff']]],
+      facts: 'Диаметр 116 460 км · 9,5 а. е. · год 29,5 лет · сутки 10 ч 33 мин · наклон оси 26,7° · 274 спутника',
+      note: 'Плотность меньше, чем у воды. Кольца в поперечнике около 280 000 км, а толщиной в основном десятки метров.',
+      moons: [{ name: 'Мимас', a: 3.08, P: 0.942, size: 0.03, col: ['#ffffff', '#c8c8c8', '#404040'] },
+              { name: 'Энцелад', a: 3.95, P: 1.370, size: 0.035, col: ['#ffffff', '#e8f4ff', '#506070'] },
+              { name: 'Тефия', a: 4.89, P: 1.888, size: 0.05, col: ['#ffffff', '#d8d8d8', '#404040'] },
+              { name: 'Диона', a: 6.26, P: 2.737, size: 0.05, col: ['#ffffff', '#cfcfcf', '#3c3c3c'] },
+              { name: 'Рея', a: 8.74, P: 4.518, size: 0.06, col: ['#ffffff', '#c8c4c0', '#3a3836'] },
+              { name: 'Титан', a: 20.3, P: 15.945, size: 0.1, col: ['#ffe0a0', '#e0a64a', '#5a3a10'] }] },
     { id: 'uranus', name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 5, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
-      facts: [['Диаметр', '50 724 км'], ['От Солнца', '19,2 а. е.'], ['Год', '84 года'], ['Спутники', '29']],
-      note: 'Вращается лёжа на боку: ось наклонена на 98°.' },
+      rot: 0.71833, tiltAx: 97.77, p1: 0.1235, halo: '160,240,245',
+      rings: [[1.64, 1.645, 0.05, ['#8aa0a8']], [1.66, 1.665, 0.05, ['#8aa0a8']], [1.675, 1.68, 0.05, ['#8aa0a8']],
+              [1.75, 1.755, 0.06, ['#9ab0b8']], [1.77, 1.775, 0.06, ['#9ab0b8']], [1.79, 1.795, 0.06, ['#9ab0b8']],
+              [1.84, 1.845, 0.06, ['#a0b8c0']], [1.87, 1.875, 0.06, ['#a0b8c0']], [1.94, 1.96, 0.2, ['#d0e4ea', '#ffffff']]],
+      facts: 'Диаметр 50 724 км · 19,2 а. е. · год 84 года · сутки 17 ч 14 мин · наклон оси 97,8° · 29 спутников',
+      note: 'Вращается лёжа на боку, поэтому кольца и спутники ходят почти вертикально.',
+      moons: [{ name: 'Миранда', a: 5.08, P: 1.413, size: 0.04, col: ['#ffffff', '#c0c0c0', '#404040'] },
+              { name: 'Ариэль', a: 7.47, P: 2.520, size: 0.06, col: ['#ffffff', '#c8c8c8', '#404040'] },
+              { name: 'Умбриэль', a: 10.4, P: 4.144, size: 0.06, col: ['#d0d0d0', '#808080', '#282828'] },
+              { name: 'Титания', a: 17.1, P: 8.706, size: 0.075, col: ['#ffffff', '#c4bcb4', '#3a3632'] },
+              { name: 'Оберон', a: 22.8, P: 13.46, size: 0.075, col: ['#f0e8e0', '#a8a098', '#2e2a26'] }] },
     { id: 'neptune', name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 5, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
-      facts: [['Диаметр', '49 244 км'], ['От Солнца', '30,1 а. е.'], ['Год', '165 лет'], ['Спутники', '16']],
-      note: 'Самые быстрые ветры в Солнечной системе, до 2 000 км/ч.' },
+      rot: 0.67125, tiltAx: 28.32, p1: 0.1084, halo: '110,150,255',
+      rings: [[2.15, 2.16, 0.05, ['#7080a0']], [2.53, 2.545, 0.08, ['#8090b0', '#a0b0d0']]],
+      facts: 'Диаметр 49 244 км · 30,1 а. е. · год 165 лет · сутки 16 ч 6 мин · наклон оси 28,3° · 16 спутников',
+      note: 'Самые быстрые ветры в Солнечной системе, до 2 000 км/ч. Тритон обращается в обратную сторону.',
+      moons: [{ name: 'Протей', a: 4.75, P: 1.122, size: 0.04, col: ['#d0d0d0', '#808080', '#282828'] },
+              { name: 'Тритон', a: 14.3, P: -5.877, size: 0.1, col: ['#ffffff', '#d8c8c0', '#403430'], inc: 23 }] },
   ];
-  const SUN = { id: 'sun', name: 'Солнце', r: 15,
-    facts: [['Диаметр', '1 392 700 км'], ['Масса', '99,86 % системы'], ['Поверхность', '≈ 5 500 °C'], ['Возраст', '4,6 млрд лет']],
-    note: 'Звезда — жёлтый карлик. В него поместилось бы около 1,3 миллиона Земель.' };
+  const SUN = { id: 'sun', name: 'Солнце', r: 15, rot: 25.38, tiltAx: 7.25, isSun: true,
+    facts: 'Диаметр 1 392 700 км · 99,86 % массы системы · поверхность ≈ 5 500 °C · экватор оборачивается за 25,4 суток',
+    note: 'Звезда — жёлтый карлик возрастом 4,6 млрд лет. В него поместилось бы около 1,3 миллиона Земель.' };
   PLANETS.forEach(p => { p.d = dist(p.a); p.sx = p.sy = -999; p.sr = 0; });
   SUN.sx = innerWidth / 2; SUN.sy = innerHeight / 2; SUN.sr = SUN.r;
+  const BODIES = [SUN, ...PLANETS];
 
-  // ---- time: days since J2000.0 ----
+  // ---------- time: days since J2000.0 ----------
   const J2000 = Date.UTC(2000, 0, 1, 12);
   const nowDays = () => (Date.now() - J2000) / 86400000;
   let days = nowDays(), speed = 10;
-  const fmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const dateEl = document.getElementById('date');
+  const fmtDay = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtTime = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  // ---- particles ----
-  const belt = [], kuiper = [], wind = [], stars = [];
+  // ---------- overview particles ----------
+  const belt = [], kuiper = [], wind = [];
   for (let i = 0; i < (small ? 2200 : 3500); i++) {
     const a = 2.1 + Math.pow(Math.random(), 0.9) * 1.2;
     belt.push({ d: dist(a) + gauss() * 0.02, L: Math.random() * 360, n: 0.98561 / Math.pow(a, 1.5), y: gauss() * 0.04,
@@ -189,73 +268,53 @@
     kuiper.push({ d: dist(a) + gauss() * 0.05, L: Math.random() * 360, n: 0.98561 / Math.pow(a, 1.5), y: gauss() * 0.12,
       c: pick(['#9fb2d8', '#7f8fb5', '#c8d4f0']), s: rnd(0.5, 1.2), o: rnd(0.2, 0.55) });
   }
-  // Saturn's rings: particles in planet radii, with the real Cassini Division gap at ~1.95–2.03
-  const saturnRing = [];
-  for (let i = 0; i < (small ? 1800 : 2800); i++) {
-    let r = rnd(1.25, 2.3);
+  const miniRing = [];
+  for (let i = 0; i < 1400; i++) {
+    const r = rnd(1.25, 2.3);
     if (r > 1.95 && r < 2.03) continue;
-    saturnRing.push({ r, a: Math.random() * TAU, c: pick(['#fff3d6', '#e8d3a2', '#c9ad78', '#fff']), s: rnd(0.5, 1.3), o: r < 1.5 ? rnd(0.2, 0.45) : rnd(0.45, 0.9) });
+    miniRing.push({ r, a: Math.random() * TAU, c: pick(['#fff3d6', '#e8d3a2', '#c9ad78']), o: r < 1.5 ? 0.3 : 0.7 });
   }
-  const uranusRing = Array.from({ length: 500 }, () => ({ r: pick([1.6, 1.75, 1.9]) + gauss() * 0.01, a: Math.random() * TAU }));
-  function resetStars() {
-    stars.length = 0;
-    for (let i = 0; i < W * H / 1100; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.06 ? 1.4 : 0.7, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
-  }
-  resetStars();
-  addEventListener('resize', resetStars);
 
-  // ---- camera ----
+  // ---------- overview camera ----------
   let yaw = 0, tilt = 0.95, vYaw = 0;
-  let focus = null, fx = 0, fz = 0, fy = 0;      // world point at screen centre
-
-  function rot(x, y, z) {   // world -> camera (yaw about vertical, then tilt), no scale
-    const cy = Math.cos(yaw), sy = Math.sin(yaw);
-    const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
-    const ct = Math.cos(tilt), st = Math.sin(tilt);
-    return [x1, z1 * st - y * ct, z1 * ct + y * st];
-  }
+  let focus = null, fx = 0, fz = 0;
+  let M_ov = camM(yaw, tilt);
   function project(x, y, z) {
-    const [a, b, depth] = rot(x - fx, y - fy, z - fz);
+    const dx = x - fx, dz = z - fz, M = M_ov;
+    const a = M[0] * dx + M[1] * y + M[2] * dz, b = M[3] * dx + M[4] * y + M[5] * dz, depth = M[6] * dx + M[7] * y + M[8] * dz;
     const k = 22 / (22 - depth * 0.6);
     return [W / 2 + a * zoom * k, H / 2 + b * zoom * k, depth, k];
   }
   const sizeK = () => Math.pow(zoom / zoom0, 0.7);
-
   function planetPos(p) {
+    if (p.isSun) return [0, 0, 0];
     const L = (p.L0 + p.n * days) * DEG;
     return [p.d * Math.cos(L), 0, -p.d * Math.sin(L)];
   }
 
-  // ---- drawing ----
-  function sphere(x, y, r, col, lightX, lightY) {
-    const g = ctx.createRadialGradient(x + lightX * r * 0.5, y + lightY * r * 0.5, r * 0.08, x, y, r * 1.05);
+  function sphere(x, y, r, col, lx, ly) {
+    const g = ctx.createRadialGradient(x + lx * r * 0.5, y + ly * r * 0.5, r * 0.08, x, y, r * 1.05);
     g.addColorStop(0, col[0]); g.addColorStop(0.45, col[1]); g.addColorStop(1, col[2]);
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
   }
 
-  function drawSun(t) {
+  function drawSunOverview() {
     const [x, y, , k] = project(0, 0, 0);
     const r = SUN.r * sizeK() * k;
     ctx.globalCompositeOperation = 'lighter';
     const halo = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 6);
-    halo.addColorStop(0, 'rgba(255,190,90,0.45)');
-    halo.addColorStop(0.3, 'rgba(255,120,40,0.12)');
-    halo.addColorStop(1, 'rgba(255,100,30,0)');
-    ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(x, y, r * 6, 0, TAU); ctx.fill();
-    // solar wind: sparks streaming out of the corona
+    halo.addColorStop(0, 'rgba(255,190,90,0.45)'); halo.addColorStop(0.3, 'rgba(255,120,40,0.12)'); halo.addColorStop(1, 'rgba(255,100,30,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 6, 0, TAU); ctx.fill();
     if (wind.length < 260 && !reduce) for (let i = 0; i < 4; i++) wind.push({ a: Math.random() * TAU, d: 1, v: rnd(0.6, 1.6), life: 1 });
     for (const w of wind) {
-      ctx.fillStyle = `rgba(255,${180 + w.life * 60 | 0},120,${w.life * 0.7})`;
-      const rr = r * w.d;
-      ctx.fillRect(x + Math.cos(w.a) * rr, y + Math.sin(w.a) * rr, 1.2, 1.2);
+      ctx.fillStyle = `rgba(255,${180 + w.life * 60 | 0},120,${(w.life * 0.7).toFixed(2)})`;
+      ctx.fillRect(x + Math.cos(w.a) * r * w.d, y + Math.sin(w.a) * r * w.d, 1.2, 1.2);
     }
     ctx.globalCompositeOperation = 'source-over';
     const g = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.1, x, y, r);
     g.addColorStop(0, '#fffbe8'); g.addColorStop(0.5, '#ffd36b'); g.addColorStop(0.85, '#ff9a2e'); g.addColorStop(1, '#e0601a');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
     SUN.sx = x; SUN.sy = y; SUN.sr = r;
   }
 
@@ -273,147 +332,476 @@
     }
   }
 
-  function drawDust(list, dt) {
+  function drawDust(list, dDays) {
     for (const q of list) {
-      q.L += q.n * dt;
+      q.L += q.n * dDays;
       const L = q.L * DEG;
       const [x, y] = project(q.d * Math.cos(L), q.y, -q.d * Math.sin(L));
-      ctx.globalAlpha = q.o;
-      ctx.fillStyle = q.c;
-      ctx.fillRect(x, y, q.s, q.s);
+      ctx.globalAlpha = q.o; ctx.fillStyle = q.c; ctx.fillRect(x, y, q.s, q.s);
     }
     ctx.globalAlpha = 1;
   }
 
-  // local ring vector -> screen offset & depth, for a ring plane tilted by `inc` around the planet's local x axis
-  function ringPoint(r, a, inc) {
-    const u = Math.cos(a) * r, w = Math.sin(a) * r;
-    return rot(u, w * Math.sin(inc), w * Math.cos(inc));
-  }
-
-  function drawRing(p, x, y, pr, front) {
-    if (p.id === 'saturn') {
-      ctx.globalCompositeOperation = 'lighter';
-      for (const q of saturnRing) {
-        q.a += 0.0025 / Math.pow(q.r, 1.5);
-        const [dx, dy, dz] = ringPoint(q.r, q.a, 27 * DEG);
-        if ((dz >= 0) !== front) continue;
-        ctx.globalAlpha = q.o;
-        ctx.fillStyle = q.c;
-        ctx.fillRect(x + dx * pr, y + dy * pr, q.s, q.s);
-      }
-    } else if (p.id === 'uranus') {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = '#bfeff5';
-      for (const q of uranusRing) {
-        const [dx, dy, dz] = ringPoint(q.r, q.a, 98 * DEG);
-        if ((dz >= 0) !== front) continue;
-        ctx.globalAlpha = 0.35;
-        ctx.fillRect(x + dx * pr, y + dy * pr, 0.8, 0.8);
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
-  function drawPlanet(p) {
-    const [x, y, depth, k] = p.screen;
+  function drawPlanetOverview(p) {
+    const [x, y, , k] = p.screen;
     const pr = p.r * sizeK() * k;
     p.sx = x; p.sy = y; p.sr = pr;
-    // light comes from the Sun
     let lx = SUN.sx - x, ly = SUN.sy - y; const ll = Math.hypot(lx, ly) || 1; lx /= ll; ly /= ll;
-    drawRing(p, x, y, pr, false);
     const glow = ctx.createRadialGradient(x, y, pr * 0.8, x, y, pr * 2.2);
     glow.addColorStop(0, p.col[1] + '55'); glow.addColorStop(1, p.col[1] + '00');
     ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, pr * 2.2, 0, TAU); ctx.fill();
+    const ringPass = front => {
+      if (p.id !== 'saturn') return;
+      const T = mul(M_ov, rotX(p.tiltAx * DEG));
+      ctx.globalCompositeOperation = 'lighter';
+      for (const q of miniRing) {
+        const u = Math.cos(q.a) * q.r, w = Math.sin(q.a) * q.r;
+        const dz = T[6] * u + T[8] * w;
+        if ((dz >= 0) !== front) continue;
+        ctx.globalAlpha = q.o; ctx.fillStyle = q.c;
+        ctx.fillRect(x + (T[0] * u + T[2] * w) * pr, y + (T[3] * u + T[5] * w) * pr, 0.9, 0.9);
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    };
+    ringPass(false);
     sphere(x, y, pr, p.col, lx, ly);
-    if ((p.id === 'jupiter' || p.id === 'saturn') && pr > 4) {
-      ctx.save();
-      ctx.beginPath(); ctx.arc(x, y, pr, 0, TAU); ctx.clip();
-      ctx.globalCompositeOperation = 'soft-light';
-      const bands = p.id === 'jupiter' ? 9 : 7;
-      for (let i = 0; i < bands; i++) {
-        ctx.fillStyle = i % 2 ? 'rgba(90,50,20,0.55)' : 'rgba(255,245,225,0.4)';
-        ctx.fillRect(x - pr, y - pr + (i / bands) * pr * 2, pr * 2, pr * 2 / bands * 0.7);
-      }
-      if (p.id === 'jupiter' && pr > 10) {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(190,80,50,0.75)';
-        ctx.beginPath(); ctx.ellipse(x + pr * 0.3, y + pr * 0.28, pr * 0.2, pr * 0.11, 0, 0, TAU); ctx.fill();
-      }
-      ctx.restore();
-      // terminator shade over the banding
-      const sh = ctx.createLinearGradient(x + lx * pr, y + ly * pr, x - lx * pr, y - ly * pr);
-      sh.addColorStop(0.45, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,10,0.7)');
-      ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(x, y, pr, 0, TAU); ctx.fill();
-    }
-    if (p.id === 'earth') {
-      const L = (days / 27.32) * TAU;
-      const md = pr * 3.2;
-      const [dx, dy, dz] = rot(Math.cos(L), 0, -Math.sin(L));
-      const mx = x + dx * md, my = y + dy * md;
-      if (dz < 0) { /* behind: drawn before earth would be ideal; small enough to skip ordering */ }
-      sphere(mx, my, Math.max(1.1, pr * 0.27), ['#ffffff', '#b8b8b8', '#3a3a3a'], lx, ly);
-    }
-    drawRing(p, x, y, pr, true);
+    ringPass(true);
   }
 
   let showNames = true;
-  function drawNames() {
+  function drawNamesOverview() {
     ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'middle';
     const taken = [];   // skip a label that would overlap one already drawn (inner planets crowd together)
     const order = focus ? [focus, ...PLANETS.filter(p => p !== focus)] : [...PLANETS].reverse();
     for (const p of order) {
-      const w = ctx.measureText(p.name.toUpperCase()).width + 4, y = p.sy;
+      if (p.isSun) continue;
+      const label = p.name.toUpperCase(), w = ctx.measureText(label).width + 4, y = p.sy;
       let x = p.sx + p.sr + 6;
       if (x + w > W - 8) x = p.sx - p.sr - 6 - w;   // flip to the left near the screen edge
       if (taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 11)) continue;
       taken.push([x, y, w]);
       ctx.fillStyle = p === focus ? 'rgba(255,215,150,0.95)' : 'rgba(205,215,245,0.7)';
-      ctx.fillText(p.name.toUpperCase(), x, y);
+      ctx.fillText(label, x, y);
     }
   }
 
-  // ---- info card ----
-  const card = document.getElementById('card');
-  const cName = document.getElementById('c-name'), cFacts = document.getElementById('c-facts'), cNote = document.getElementById('c-note');
-  const hint = document.getElementById('hint');
-  function select(obj) {
-    focus = obj && obj !== SUN ? obj : null;
-    if (!obj) { card.hidden = true; zoomTarget = zoom0; hint.hidden = false; return; }
-    cName.textContent = obj.name;
-    cFacts.innerHTML = '';
-    for (const [k, v] of obj.facts) {
-      const wrap = document.createElement('div');
-      const dt = document.createElement('dt'); dt.textContent = k;
-      const dd = document.createElement('dd'); dd.textContent = v;
-      wrap.append(dt, dd); cFacts.append(wrap);
+  function drawOverview(dDays) {
+    M_ov = camM(yaw, tilt);
+    drawOrbits();
+    ctx.globalCompositeOperation = 'lighter';
+    drawDust(kuiper, dDays);
+    drawDust(belt, dDays);
+    ctx.globalCompositeOperation = 'source-over';
+    for (const w of wind) { w.d += w.v * frameDt * 2; w.life -= frameDt * 0.5; }
+    for (let i = wind.length - 1; i >= 0; i--) if (wind[i].life <= 0) wind.splice(i, 1);
+    for (const p of PLANETS) { const [x, y, z] = planetPos(p); p.screen = project(x, y, z); }
+    const sunDepth = project(0, 0, 0)[2];
+    const order = [...PLANETS].sort((a, b) => a.screen[2] - b.screen[2]);
+    let sunDrawn = false;
+    for (const p of order) {
+      if (!sunDrawn && p.screen[2] > sunDepth) { drawSunOverview(); sunDrawn = true; }
+      drawPlanetOverview(p);
     }
-    cNote.textContent = obj.note;
-    card.hidden = false; hint.hidden = true;
-    zoomTarget = obj === SUN ? zoom0 * 2.2 : zoom0 * (obj.a < 2 ? 7 : 3.2);
+    if (!sunDrawn) drawSunOverview();
+    if (showNames) drawNamesOverview();
   }
-  document.getElementById('c-close').addEventListener('click', () => select(null));
 
-  // ---- controls ----
+  // =====================================================================
+  // Close-up scene: the body made of surface particles, spinning on its tilted axis,
+  // with particle rings, a sparkling dust disc and its real major moons
+  // =====================================================================
+  function surfaceColor(b, x, y, z, lat, lon) {
+    const n = fbm(x * 1.8 + 5, y * 1.8, z * 1.8, 5);
+    const alat = Math.abs(lat);
+    switch (b.id) {
+      case 'sun': {
+        const g = fbm(x * 9, y * 9, z * 9, 3);
+        let c = mix([255, 120, 20], [255, 235, 150], smooth(clamp((g - 0.3) * 2.2, 0, 1)));
+        if (alat < 35 * DEG && alat > 6 * DEG && fbm(x * 4 + 9, y * 4, z * 4, 3) > 0.74) c = [120, 50, 10];
+        return c;
+      }
+      case 'mercury': {
+        let c = mix([105, 100, 96], [205, 198, 190], n);
+        if (fbm(x * 7, y * 7, z * 7, 2) > 0.68) c = mix(c, [70, 66, 62], 0.6);
+        return c;
+      }
+      case 'venus': {
+        const b2 = Math.sin(lat * 6 + fbm(x * 2.5, y * 2.5 + 3, z * 2.5) * 5);
+        return mix(mix([205, 165, 105], [245, 225, 180], n), [250, 238, 205], (b2 + 1) * 0.25);
+      }
+      case 'earth': {
+        if (alat > (68 + (n - 0.5) * 30) * DEG) return [235, 242, 248];
+        if (n > 0.55) {
+          const dry = alat < 33 * DEG && fbm(x * 3 + 2, y * 3, z * 3, 3) > 0.52;
+          return dry ? mix([190, 160, 110], [215, 190, 140], n) : mix([50, 100, 45], [120, 135, 70], (n - 0.55) * 4);
+        }
+        return mix([10, 35, 105], [35, 95, 175], smooth(clamp((n - 0.3) * 4, 0, 1)));
+      }
+      case 'mars': {
+        if (alat > 76 * DEG) return [240, 236, 230];
+        let c = mix([165, 70, 35], [220, 135, 85], n);
+        if (fbm(x * 2.2 + 7, y * 2.2, z * 2.2, 4) > 0.58) c = mix(c, [100, 50, 32], 0.6);
+        return c;
+      }
+      case 'jupiter': {
+        const b2 = Math.sin(lat * 15 + fbm(x * 3, y * 3, z * 3) * 2.4);
+        let c = b2 > 0.5 ? [240, 228, 205] : b2 > 0 ? [215, 180, 140] : b2 > -0.5 ? [190, 130, 85] : [150, 95, 65];
+        c = mix(c, [255, 245, 230], (n - 0.5) * 0.8);
+        const dl = (lat + 22 * DEG) / (6 * DEG), dn = Math.atan2(Math.sin(lon), Math.cos(lon)) / (13 * DEG);
+        if (dl * dl + dn * dn < 1) c = mix([200, 85, 55], [225, 120, 80], dl * dl + dn * dn);
+        return c;
+      }
+      case 'saturn': {
+        const b2 = Math.sin(lat * 11 + fbm(x * 2, y * 2, z * 2) * 1.2);
+        return mix(mix([210, 180, 120], [240, 222, 170], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.6);
+      }
+      case 'uranus':
+        return mix([130, 205, 215], [175, 235, 240], (Math.sin(lat * 5) + 1) * 0.3 + (n - 0.5) * 0.4);
+      case 'neptune': {
+        let c = mix([30, 60, 185], [70, 110, 235], n);
+        const dl = (lat + 20 * DEG) / (7 * DEG), dn = Math.atan2(Math.sin(lon - 0.7), Math.cos(lon - 0.7)) / (14 * DEG);
+        if (dl * dl + dn * dn < 1) c = [20, 32, 110];
+        if (fbm(x * 4 + 1, y * 9, z * 4, 3) > 0.68) c = [215, 230, 255];
+        return c;
+      }
+    }
+    return [200, 200, 200];
+  }
+
+  function buildClose(b) {
+    if (b.close) return b.close;
+    const N = small ? 5200 : 9000;
+    const pts = new Float32Array(N * 3), col = new Array(N), city = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      const y = 1 - 2 * (i + 0.5) / N, rr = Math.sqrt(1 - y * y), ph = i * 2.399963;
+      const x = Math.cos(ph) * rr, z = Math.sin(ph) * rr;
+      pts[i * 3] = x; pts[i * 3 + 1] = y; pts[i * 3 + 2] = z;
+      const c = surfaceColor(b, x, y, z, Math.asin(y), Math.atan2(z, x));
+      const j = rnd(0.93, 1.07);   // per-particle grain breaks up the regular point lattice
+      col[i] = rgb([Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)]);
+      if (b.id === 'earth' && c[1] > c[2] && Math.random() < 0.09) city[i] = 1;
+    }
+    const clouds = [];
+    if (b.id === 'earth') {
+      for (let i = 0; i < N * 1.1; i++) {
+        const y = rnd(-1, 1), ph = rnd(0, TAU), rr = Math.sqrt(1 - y * y), x = Math.cos(ph) * rr, z = Math.sin(ph) * rr;
+        if (fbm(x * 2.6 + 20, y * 4, z * 2.6, 4) > 0.56) clouds.push(x * 1.012, y * 1.012, z * 1.012);
+      }
+    }
+    // rings + dust disc as one particle list
+    const parts = [];
+    const ringOuter = b.rings ? Math.max(...b.rings.map(r => r[1])) : 0;
+    const budget = b.id === 'saturn' ? (small ? 20000 : 34000) : (small ? 2500 : 4000);
+    if (b.rings) {
+      const total = b.rings.reduce((s, r) => s + (r[1] - r[0]) * r[2], 0);
+      for (const [r0, r1, dens, cols] of b.rings) {
+        const n = Math.round(budget * (r1 - r0) * dens / total);
+        for (let i = 0; i < n; i++) {
+          const r = rnd(r0, r1);
+          parts.push({ r, a: rnd(0, TAU), h: gauss() * 0.004, c: pick(cols), s: rnd(0.7, 1.7) * (dens > 0.5 ? 1 : 0.8),
+            o: clamp(dens * rnd(0.5, 1), 0.08, 1), w: TAU / (b.p1 * Math.pow(r, 1.5)) });
+        }
+      }
+    }
+    if (!b.isSun) {
+      const dustCols = [b.col[0], b.col[1], '#ffffff', '#ffe9a8', '#9fd8ff'];
+      const nd = (b.rings ? (small ? 1100 : 1800) : (small ? 500 : 800));
+      const d0 = Math.max(1.5, ringOuter + 0.2);
+      for (let i = 0; i < nd; i++) {
+        const r = d0 + Math.pow(Math.random(), 1.6) * 2.4;
+        parts.push({ r, a: rnd(0, TAU), h: gauss() * 0.05 * r, c: pick(dustCols), s: Math.random() < 0.1 ? rnd(1.6, 2.6) : rnd(0.6, 1.4),
+          o: rnd(0.25, 0.85), w: TAU / (b.p1 * Math.pow(r, 1.5)), tw: rnd(0, TAU) });
+      }
+    }
+    // moons: radii compressed onto a log scale outside the rings
+    const moons = (b.moons || []).map(m => ({ ...m }));
+    const base = Math.max(1.6, ringOuter + 0.25);
+    const a0 = Math.min(3, ...moons.map(m => m.a));
+    moons.forEach(m => { m.rd = base + 0.65 * Math.log(m.a / a0); m.ph = rnd(0, TAU); });
+    const maxRd = moons.length ? Math.max(...moons.map(m => m.rd)) : 0;
+    const fit = Math.max(ringOuter * 1.08, maxRd * 0.8, 1.8);
+    // solar prominences
+    const flares = b.isSun ? Array.from({ length: small ? 500 : 900 }, () => newFlare(true)) : [];
+    const n = parts.length;
+    b.close = { N, pts, col, city, clouds, parts, moons, fit, flares,
+      px: new Float32Array(n), py: new Float32Array(n), pd: new Float32Array(n), pa: new Float32Array(n) };
+    return b.close;
+  }
+
+  function newFlare(randomAge) {
+    const life = rnd(2, 5);
+    return { th: rnd(0, TAU), v: rnd(0.15, 0.45), life, age: randomAge ? rnd(0, life) : 0, drift: rnd(-0.08, 0.08), s: rnd(0.8, 2) };
+  }
+
+  // close-up camera
+  let sel = null, pendingSel, closeK = 0, closeTarget = 0;
+  let cYaw = 0, cTilt = 0.33, cZoom = 1, vcYaw = 0;
+  let closeR = 100;
+
+  function closeSetup(b) {
+    const C = buildClose(b);
+    cTilt = b.isSun ? 0.2 : b.rings ? 0.12 : 0.3; cZoom = 1;
+    // turn the camera so sunlight comes from the left, a little toward the viewer, like the reference video
+    const [x, , z] = planetPos(b);
+    const L = Math.hypot(x, z) || 1, lx = -x / L, lz = -z / L;
+    cYaw = b.isSun ? 0 : Math.atan2(0.3, -0.95) - Math.atan2(lz, lx);
+    return C;
+  }
+
+  function drawClose(b, A, dDays, t) {
+    const C = b.close;
+    const R = closeR * cZoom;
+    const Mc = camM(cYaw, cTilt);
+    const T = rotX(b.tiltAx * DEG);
+    const spin = (TAU * days / b.rot) % TAU;
+    const TS = mul(T, rotY(spin));
+    const M = mul(Mc, TS);
+    const Mr = mul(Mc, T);
+    // sunlight in world and in body coordinates
+    const [wx, , wz] = planetPos(b);
+    const wl = Math.hypot(wx, wz) || 1;
+    const Lw = b.isSun ? [0, 0, 1] : [-wx / wl, 0, -wz / wl];
+    const Lb = [TS[0] * Lw[0] + TS[3] * Lw[1] + TS[6] * Lw[2], TS[1] * Lw[0] + TS[4] * Lw[1] + TS[7] * Lw[2], TS[2] * Lw[0] + TS[5] * Lw[1] + TS[8] * Lw[2]];
+    const Ls = [Mc[0] * Lw[0] + Mc[2] * Lw[2], Mc[3] * Lw[0] + Mc[5] * Lw[2]];   // light direction on screen
+
+    // --- particles (rings + dust): compute once, draw in two depth passes ---
+    const P = C.parts, px = C.px, py = C.py, pd = C.pd, pa = C.pa;
+    for (let i = 0; i < P.length; i++) {
+      const q = P[i];
+      q.a += q.w * dDays;
+      const u = Math.cos(q.a) * q.r, w = Math.sin(q.a) * q.r, h = q.h;
+      const X = T[0] * u + T[1] * h + T[2] * w, Y = T[3] * u + T[4] * h + T[5] * w, Z = T[6] * u + T[7] * h + T[8] * w;
+      let o = q.o;
+      // planet's shadow on the rings
+      const dl = X * Lw[0] + Y * Lw[1] + Z * Lw[2];
+      if (dl < 0 && X * X + Y * Y + Z * Z - dl * dl < 1) o *= 0.12;
+      if (q.tw !== undefined) o *= 0.45 + 0.55 * Math.sin(t * 2 + q.tw);
+      px[i] = Mc[0] * X + Mc[1] * Y + Mc[2] * Z;
+      py[i] = Mc[3] * X + Mc[4] * Y + Mc[5] * Z;
+      pd[i] = Mc[6] * X + Mc[7] * Y + Mc[8] * Z;
+      pa[i] = o * A;
+    }
+    const partPass = front => {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < P.length; i++) {
+        if ((pd[i] >= 0) !== front) continue;
+        ctx.globalAlpha = pa[i]; ctx.fillStyle = P[i].c;
+        ctx.fillRect(px[i] * R, py[i] * R, P[i].s, P[i].s);
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    };
+
+    // --- moons ---
+    for (const m of C.moons) {
+      m.ph += TAU / m.P * dDays;
+      const Mi = m.inc ? mul(T, rotX(m.inc * DEG)) : T;
+      const u = Math.cos(m.ph) * m.rd, w = Math.sin(m.ph) * m.rd;
+      m.X = Mi[0] * u + Mi[2] * w; m.Y = Mi[3] * u + Mi[5] * w; m.Z = Mi[6] * u + Mi[8] * w;
+      m.sx = Mc[0] * m.X + Mc[1] * m.Y + Mc[2] * m.Z; m.sy = Mc[3] * m.X + Mc[4] * m.Y + Mc[5] * m.Z; m.sd = Mc[6] * m.X + Mc[7] * m.Y + Mc[8] * m.Z;
+      const dl = m.X * Lw[0] + m.Y * Lw[1] + m.Z * Lw[2];
+      m.eclipse = dl < 0 && m.X * m.X + m.Y * m.Y + m.Z * m.Z - dl * dl < 1;
+      m.Mi = Mi;
+    }
+    const orbitPass = front => {
+      ctx.lineWidth = 1;
+      for (const m of C.moons) {
+        const Mi = mul(Mc, m.Mi);
+        ctx.strokeStyle = `rgba(160,185,255,${(0.16 * A).toFixed(3)})`;
+        ctx.beginPath();
+        let pen = false;
+        for (let i = 0; i <= 96; i++) {
+          const a = i / 96 * TAU, u = Math.cos(a) * m.rd, w = Math.sin(a) * m.rd;
+          const d = Mi[6] * u + Mi[8] * w;
+          const x = (Mi[0] * u + Mi[2] * w) * R, y = (Mi[3] * u + Mi[5] * w) * R;
+          if ((d >= 0) === front) { pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; } else pen = false;
+        }
+        ctx.stroke();
+      }
+    };
+    const moonPass = front => {
+      for (const m of C.moons) {
+        if ((m.sd >= 0) !== front) continue;
+        const r = Math.max(1.6, m.size * R);
+        ctx.globalAlpha = A * (m.eclipse ? 0.25 : 1);
+        sphere(m.sx * R, m.sy * R, r, m.col, Ls[0], Ls[1]);
+        ctx.globalAlpha = 1;
+      }
+    };
+
+    // --- glow behind the body ---
+    ctx.globalCompositeOperation = 'lighter';
+    const haloCol = b.isSun ? '255,150,50' : b.halo;
+    const haloR = b.isSun ? R * 2.2 : R * 1.6;
+    const g = ctx.createRadialGradient(0, 0, R * 0.9, 0, 0, haloR);
+    g.addColorStop(0, `rgba(${haloCol},${(b.isSun ? 0.32 : 0.22) * A})`); g.addColorStop(1, `rgba(${haloCol},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, haloR, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    orbitPass(false);
+    partPass(false);
+    moonPass(false);
+
+    // --- the body: dark disc, then surface particles lit by the Sun ---
+    ctx.globalAlpha = A;
+    ctx.fillStyle = b.isSun ? '#a03c08' : b.col[2];
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    const ps = R * Math.sqrt(TAU / C.N) * 1.55, half = ps / 2;
+    const pts = C.pts, col = C.col, city = C.city;
+    const amb = 0.04;
+    for (let i = 0; i < C.N; i++) {
+      const x = pts[i * 3], y = pts[i * 3 + 1], z = pts[i * 3 + 2];
+      const d = M[6] * x + M[7] * y + M[8] * z;
+      if (d <= 0) continue;
+      const sx = (M[0] * x + M[1] * y + M[2] * z) * R, sy = (M[3] * x + M[4] * y + M[5] * z) * R;
+      let a;
+      if (b.isSun) a = (0.5 + 0.5 * d) * (0.85 + 0.15 * Math.sin(t * 3 + i * 1.7));
+      else {
+        const l = x * Lb[0] + y * Lb[1] + z * Lb[2];
+        a = (amb + (1 - amb) * Math.max(0, l)) * (0.72 + 0.28 * d);
+        if (city[i] && l < -0.08) { ctx.globalAlpha = A * 0.9; ctx.fillStyle = '#ffd27a'; ctx.fillRect(sx - 0.6, sy - 0.6, 1.3, 1.3); continue; }
+      }
+      ctx.globalAlpha = A * a;
+      ctx.fillStyle = col[i];
+      ctx.fillRect(sx - half, sy - half, ps, ps);
+    }
+    // clouds drift a little faster than the ground
+    if (C.clouds.length) {
+      const Mcl = mul(Mc, mul(T, rotY(spin * 1.04 + t * 0.01)));
+      const TScl = mul(T, rotY(spin * 1.04 + t * 0.01));
+      const Lc = [TScl[0] * Lw[0] + TScl[6] * Lw[2], TScl[1] * Lw[0] + TScl[7] * Lw[2], TScl[2] * Lw[0] + TScl[8] * Lw[2]];
+      ctx.fillStyle = '#ffffff';
+      const cs = ps * 0.75;
+      for (let i = 0; i < C.clouds.length; i += 3) {
+        const x = C.clouds[i], y = C.clouds[i + 1], z = C.clouds[i + 2];
+        const d = Mcl[6] * x + Mcl[7] * y + Mcl[8] * z;
+        if (d <= 0) continue;
+        const l = x * Lc[0] + y * Lc[1] + z * Lc[2];
+        if (l <= 0) continue;
+        ctx.globalAlpha = A * 0.42 * Math.sqrt(l) * (0.6 + 0.4 * d);
+        ctx.fillRect((Mcl[0] * x + Mcl[1] * y + Mcl[2] * z) * R - cs / 2, (Mcl[3] * x + Mcl[4] * y + Mcl[5] * z) * R - cs / 2, cs, cs);
+      }
+    }
+    ctx.globalAlpha = 1;
+    // atmosphere rim on the lit side
+    if (!b.isSun && b.id !== 'mercury') {
+      const rim = ctx.createRadialGradient(0, 0, R * 0.92, 0, 0, R * 1.08);
+      rim.addColorStop(0, `rgba(${b.halo},0)`); rim.addColorStop(0.5, `rgba(${b.halo},${0.35 * A})`); rim.addColorStop(1, `rgba(${b.halo},0)`);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, R * 1.1, 0, TAU);
+      ctx.clip();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = rim;
+      ctx.beginPath(); ctx.arc(Ls[0] * R * 0.05, Ls[1] * R * 0.05, R * 1.08, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    // solar prominences arcing off the limb
+    if (b.isSun) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < C.flares.length; i++) {
+        const f = C.flares[i];
+        f.age += frameDt;
+        if (f.age > f.life) { C.flares[i] = newFlare(false); continue; }
+        const u = f.age / f.life, h = 4 * u * (1 - u) * f.v;
+        const th = f.th + f.drift * u;
+        ctx.globalAlpha = A * (1 - u) * 0.8;
+        ctx.fillStyle = u < 0.5 ? '#ffd27a' : '#ff7a2e';
+        ctx.fillRect(Math.cos(th) * R * (1 + h), Math.sin(th) * R * (1 + h), f.s, f.s);
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+
+    partPass(true);
+    orbitPass(true);
+    moonPass(true);
+
+    if (showNames && C.moons.length) {
+      ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(205,215,245,${(0.8 * A).toFixed(3)})`;
+      for (const m of C.moons) {
+        const hidden = m.sd < 0 && m.sx * m.sx + m.sy * m.sy < 1;   // behind the planet
+        if (hidden) continue;
+        ctx.fillText(m.name.toUpperCase(), m.sx * R + Math.max(1.6, m.size * R) + 5, m.sy * R);
+      }
+    }
+  }
+
+  // ---------- selection & UI ----------
+  const titleEl = document.getElementById('title'), dateEl = document.getElementById('date');
+  const subEl = document.getElementById('sub'), noteEl = document.getElementById('note'), hint = document.getElementById('hint');
+  const bodiesRow = document.getElementById('bodies');
+  const chips = new Map();
+  const addChip = (b, label, dot) => {
+    const btn = document.createElement('button');
+    btn.id = 'b-' + (b ? b.id : 'all');
+    btn.setAttribute('aria-pressed', String(!b));
+    if (dot) { const d = document.createElement('span'); d.className = 'dot'; d.style.background = dot; btn.append(d); }
+    btn.append(label);
+    btn.addEventListener('click', () => choose(b));
+    bodiesRow.append(btn);
+    chips.set(b, btn);
+  };
+  addChip(null, 'Обзор');
+  addChip(SUN, 'Солнце', 'radial-gradient(circle at 35% 35%,#fffbe8,#ffb347 55%,#e0601a)');
+  PLANETS.forEach(p => addChip(p, p.name, `radial-gradient(circle at 35% 35%,${p.col[0]},${p.col[1]} 55%,${p.col[2]})`));
+
+  let speedBeforeClose = null;
   const speedBtns = [...document.querySelectorAll('[data-speed]')];
-  speedBtns.forEach(b => b.addEventListener('click', () => {
-    speed = parseFloat(b.dataset.speed);
-    speedBtns.forEach(o => o.setAttribute('aria-pressed', String(o === b)));
-  }));
+  function setSpeed(v) {
+    speed = v;
+    speedBtns.forEach(o => o.setAttribute('aria-pressed', String(Math.abs(parseFloat(o.dataset.speed) - v) < 1e-6)));
+  }
+  speedBtns.forEach(b => b.addEventListener('click', () => setSpeed(parseFloat(b.dataset.speed))));
   document.getElementById('s-now').addEventListener('click', () => { days = nowDays(); });
   const namesBtn = document.getElementById('t-names');
   namesBtn.addEventListener('click', () => { showNames = !showNames; namesBtn.setAttribute('aria-pressed', String(showNames)); });
-  if (reduce) { speed = 0; speedBtns.forEach(o => o.setAttribute('aria-pressed', String(o.dataset.speed === '0'))); }
+  if (reduce) setSpeed(0);
 
+  function showInfo(b) {
+    chips.forEach((btn, k) => btn.setAttribute('aria-pressed', String(k === b)));
+    if (!b) {
+      titleEl.textContent = 'Солнечная система';
+      subEl.textContent = 'Положения планет на эту дату · расстояния и размеры сжаты';
+      noteEl.hidden = true;
+      hint.textContent = 'ВЫБЕРИ ПЛАНЕТУ ВНИЗУ ИЛИ НАЖМИ НА НЕЁ';
+    } else {
+      titleEl.textContent = b.name;
+      subEl.textContent = b.facts;
+      noteEl.textContent = b.note; noteEl.hidden = false;
+      hint.textContent = 'ПРОВЕДИ — ОБЛЕТЕТЬ · ЩИПОК — МАСШТАБ';
+    }
+    chips.get(b)?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+
+  function enter(b) {
+    sel = b; focus = b.isSun ? null : b;
+    zoomTarget = zoom0 * (b.isSun ? 2.2 : b.a < 2 ? 7 : 3.2);
+    closeSetup(b);
+    closeTarget = 1;
+    if (speedBeforeClose === null) { speedBeforeClose = speed; if (speed > 1) setSpeed(1 / 24); }
+    showInfo(b);
+  }
+  function choose(b) {
+    if (b === sel && closeTarget === 1) return;
+    if (!b) {
+      closeTarget = 0; pendingSel = undefined; focus = null; zoomTarget = zoom0;
+      if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
+      showInfo(null);
+      return;
+    }
+    if (closeK > 0.02 && sel) { pendingSel = b; closeTarget = 0; showInfo(b); }   // pull back, fly over, dive in
+    else enter(b);
+  }
+
+  // ---------- pointer ----------
   const pts = new Map();
   let pinch0 = null, tap = null;
   cv.addEventListener('pointerdown', e => {
     cv.setPointerCapture(e.pointerId);
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     tap = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false } : null;
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom }; }
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom, cz: cZoom }; }
   });
   cv.addEventListener('pointermove', e => {
     const p = pts.get(e.pointerId);
@@ -421,77 +809,87 @@
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8) tap.moved = true;
+    const inClose = closeTarget === 1;
     if (pts.size === 1 && (!tap || tap.moved)) {
-      vYaw = dx * 0.006; yaw += vYaw;
-      tilt = clamp(tilt - dy * 0.006, 0.12, Math.PI / 2);
+      if (inClose) { vcYaw = dx * 0.006; cYaw += vcYaw; cTilt = clamp(cTilt - dy * 0.006, -1.45, 1.5); }
+      else { vYaw = dx * 0.006; yaw += vYaw; tilt = clamp(tilt - dy * 0.006, 0.12, Math.PI / 2); }
     } else if (pts.size === 2 && pinch0) {
-      const [a, b] = [...pts.values()];
-      zoom = zoomTarget = clamp(pinch0.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d, zoom0 * 0.6, zoom0 * 14);
+      const [a, b] = [...pts.values()], k = Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d;
+      if (inClose) cZoom = clamp(pinch0.cz * k, 0.35, 3.5);
+      else zoom = zoomTarget = clamp(pinch0.z * k, zoom0 * 0.6, zoom0 * 14);
     }
   });
   cv.addEventListener('pointerup', e => {
     pts.delete(e.pointerId);
     if (pts.size < 2) pinch0 = null;
-    if (tap && !tap.moved && performance.now() - tap.t < 500) {
+    if (tap && !tap.moved && performance.now() - tap.t < 500 && closeTarget === 0) {
       const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
       let best = null, bd = Infinity;
-      for (const o of [SUN, ...PLANETS]) {
+      for (const o of BODIES) {
         const d = Math.hypot(x - o.sx, y - o.sy) - o.sr;
         if (d < 18 && d < bd) { bd = d; best = o; }
       }
-      select(best);
+      if (best) choose(best);
     }
     tap = null;
   });
   cv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch0 = null; tap = null; });
   cv.addEventListener('wheel', e => {
     e.preventDefault();
-    zoom = zoomTarget = clamp(zoom * Math.exp(-e.deltaY * 0.0015), zoom0 * 0.6, zoom0 * 14);
+    const k = Math.exp(-e.deltaY * 0.0015);
+    if (closeTarget === 1) cZoom = clamp(cZoom * k, 0.35, 3.5);
+    else zoom = zoomTarget = clamp(zoom * k, zoom0 * 0.6, zoom0 * 14);
   }, { passive: false });
 
-  // ---- frame loop ----
-  let last = performance.now(), t = 0, lastDateStr = '';
+  // ---------- frame loop ----------
+  let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0;
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt; frameDt = dt;
     const dDays = speed * dt;
     days += dDays;
-    if (!pts.size) { yaw += vYaw; vYaw *= 0.93; }
 
-    // follow the focused planet, or ease back to the Sun
+    // transition between overview and close-up
+    closeK = closeTarget ? Math.min(1, closeK + dt / 1.3) : Math.max(0, closeK - dt / 0.9);
+    if (closeTarget === 0 && closeK === 0 && pendingSel) { const b = pendingSel; pendingSel = undefined; enter(b); }
+    const e = smooth(smooth(closeK));
+
+    if (!pts.size) {
+      yaw += vYaw; vYaw *= 0.93;
+      cYaw += vcYaw; vcYaw *= 0.93;
+      if (!reduce && closeK === 0) yaw += dt * 0.02;   // slow drift around the system
+    }
     const [tx, , tz] = focus ? planetPos(focus) : [0, 0, 0];
     const ease = Math.min(1, dt * 4);
     fx += (tx - fx) * ease; fz += (tz - fz) * ease;
     zoom += (zoomTarget - zoom) * ease;
 
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
     ctx.fillStyle = '#020309';
     ctx.fillRect(0, 0, W, H);
-    for (const s of stars) {
-      ctx.fillStyle = `rgba(215,225,255,${(0.3 + 0.5 * Math.abs(Math.sin(t * s.sp + s.tw))).toFixed(2)})`;
-      ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
+    const drawStars = a => {
+      for (const s of stars) {
+        ctx.fillStyle = `rgba(215,225,255,${((0.3 + 0.5 * Math.abs(Math.sin(t * s.sp + s.tw))) * a).toFixed(3)})`;
+        ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
+      }
+    };
+    if (closeK < 1) { drawStars(1); drawOverview(closeK > 0 ? 0 : dDays); }
+    if (closeK > 0 && sel) {
+      ctx.fillStyle = `rgba(2,3,9,${e.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+      drawStars(e);
+      closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.3));
+      // the close-up grows out of the body's spot in the overview
+      const s0 = clamp((sel.sr || 4) / closeR, 0.01, 1);
+      const sc = lerp(s0, 1, e);
+      const cxp = lerp(sel.sx, W / 2, e), cyp = lerp(sel.sy, H * 0.52, e);
+      ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * cxp, DPR * cyp);
+      drawClose(sel, e, dDays, t);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     }
 
-    drawOrbits();
-    ctx.globalCompositeOperation = 'lighter';
-    drawDust(kuiper, dDays);
-    drawDust(belt, dDays);
-    ctx.globalCompositeOperation = 'source-over';
-    for (const w of wind) { w.d += w.v * dt * 2; w.life -= dt * 0.5; }
-    for (let i = wind.length - 1; i >= 0; i--) if (wind[i].life <= 0) wind.splice(i, 1);
-
-    // painter's order by depth: things farther from the camera first
-    for (const p of PLANETS) { const [x, y, z] = planetPos(p); p.screen = project(x, y, z); }
-    const sunDepth = project(0, 0, 0)[2];
-    const order = [...PLANETS].sort((a, b) => a.screen[2] - b.screen[2]);
-    let sunDrawn = false;
-    for (const p of order) {
-      if (!sunDrawn && p.screen[2] > sunDepth) { drawSun(t); sunDrawn = true; }
-      drawPlanet(p);
-    }
-    if (!sunDrawn) drawSun(t);
-    if (showNames) drawNames();
-
-    const ds = fmt.format(new Date(J2000 + days * 86400000));
+    const ds = (closeTarget ? fmtTime : fmtDay).format(new Date(J2000 + days * 86400000));
     if (ds !== lastDateStr) { dateEl.textContent = ds; lastDateStr = ds; }
     requestAnimationFrame(frame);
   }
