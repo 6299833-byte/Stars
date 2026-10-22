@@ -102,6 +102,7 @@
 <div class="card">
   <h1>Млечный Путь</h1>
   <p>Спиральная галактика с перемычкой · диаметр ≈ 100&nbsp;000&nbsp;св.&nbsp;лет · 100–400&nbsp;млрд звёзд · Солнце в&nbsp;26&nbsp;000&nbsp;св.&nbsp;лет от&nbsp;центра · один оборот Солнца ≈ 230&nbsp;млн&nbsp;лет</p>
+  <p>Строение по иллюстрации NASA/JPL-Caltech (R.&nbsp;Hurt) на основе обзора телескопа Spitzer: перемычка ≈ 27&nbsp;000&nbsp;св.&nbsp;лет, два главных рукава и два слабых.</p>
 </div>
 
 <div class="bottom">
@@ -142,15 +143,15 @@
   const Q = small ? 0.55 : 1;   // particle budget
 
   // ---------- galaxy model (units: kiloparsecs; screen-style axes, y points toward the Sun) ----------
-  // Bar: ~4.5 kpc half-length, its near end 27° from the Sun–centre line toward l = +90°.
+  // Bar: ~27 000 ly long (Spitzer GLIMPSE), so ~4.1 kpc half-length, its near end 27° from the Sun–centre line toward l = +90°.
   const BAR = 117 * DEG;
   // Logarithmic arms with a 12.5° pitch; t0/r0 put each arm where surveys place it in the Sun's direction.
   const K = 1 / Math.tan(12.5 * DEG);
   const ARMS = [
     { name: 'Рукав Щита — Центавра', t0: 117 * DEG, r0: 4.5, w: 1.0, rMax: 17, labelR: 9.5 },
     { name: 'Рукав Персея',           t0: 297 * DEG, r0: 4.5, w: 1.0, rMax: 16, labelR: 13.2 },
-    { name: 'Рукав Стрельца',         t0: 207 * DEG, r0: 4.2, w: 0.6, rMax: 14, labelR: 9 },
-    { name: 'Внешний рукав',          t0: 27 * DEG,  r0: 4.2, w: 0.55, rMax: 16, labelR: 14.5 },
+    { name: 'Рукав Стрельца',         t0: 207 * DEG, r0: 4.2, w: 0.45, rMax: 14, labelR: 9 },
+    { name: 'Рукав Наугольника',      t0: 27 * DEG,  r0: 4.2, w: 0.45, rMax: 16, labelR: 6.2, outerLabelR: 14.5 },
   ];
   const SPUR = { name: 'Рукав Ориона', t0: 90 * DEG, r0: 8.3, w: 0.22, rMin: 7.3, rMax: 9.4 };
   const SUN = [0, 8.2, 0.02];
@@ -175,7 +176,7 @@
   }
   // bar
   for (let i = 0; i < 12000 * Q; i++) {
-    const u = Math.max(-4.6, Math.min(4.6, gauss() * 1.7)), v = gauss() * 0.7 * (1 - Math.abs(u) / 7);
+    const u = Math.max(-4.1, Math.min(4.1, gauss() * 1.5)), v = gauss() * 0.7 * (1 - Math.abs(u) / 7);
     const x = u * Math.cos(BAR) - v * Math.sin(BAR), y = u * Math.sin(BAR) + v * Math.cos(BAR);
     push('glow', x, y, gauss() * 0.3, pick(CORE), rnd(0.14, 0.28), rnd(1.1, 2));
   }
@@ -229,6 +230,15 @@
       push('dust', rd * Math.cos(t) + gauss() * 0.12, rd * Math.sin(t) + gauss() * 0.12, gauss() * 0.04, DUST, rnd(0.16, 0.3), rnd(6, 11));
     }
   })();
+  // near and far 3-kpc arms: two arcs hugging the bar on either side
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5000 * Q; i++) {
+      const sU = rnd(-1, 1), u = sU * 4.2, v = side * (2.7 + 0.7 * sU * sU) + gauss() * 0.22;
+      const x = u * Math.cos(BAR) - v * Math.sin(BAR), y = u * Math.sin(BAR) + v * Math.cos(BAR);
+      if (Math.random() < 0.05) push('bright', x, y, gauss() * 0.06, pick(YOUNG), rnd(0.35, 0.6), rnd(1.8, 2.8));
+      else push('glow', x, y, gauss() * 0.08, pick(YOUNG), rnd(0.2, 0.4), rnd(0.9, 1.7));
+    }
+  }
   // dust ring around the bar (the 3-kpc arms region)
   for (let i = 0; i < 5000 * Q; i++) {
     const t = Math.random() * TAU, r = 3.6 + gauss() * 0.35;
@@ -358,6 +368,7 @@
   addLabel('Солнце', 'sun', SUN, 14, -5);
   addLabel('Центр · Стрелец A*', '', [0, 0, 0], 10, -18);
   ARMS.forEach(a => { const [x, y] = armXY(a, a.labelR); addLabel(a.name, 'arm', [x, y, 0], -40, -8); });
+  { const a = ARMS[3], [x, y] = armXY(a, a.outerLabelR); addLabel('Внешний рукав', 'arm', [x, y, 0], -40, -8); }
   { const [x, y] = armXY(SPUR, 8.9); addLabel(SPUR.name, 'arm', [x + 0.6, y + 0.9, 0], -30, 6); }
 
   // ---------- controls ----------
