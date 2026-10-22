@@ -1,0 +1,453 @@
+<title>Млечный Путь</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: the galaxy fills the screen; a fact card top-left, a scale bar and view controls at the bottom */
+  :root {
+    --space: #020208;
+    --ink: #e8ecff;
+    --muted: rgba(200, 210, 240, 0.6);
+    --chip: rgba(16, 18, 34, 0.72);
+    --chip-line: rgba(200, 190, 255, 0.2);
+    --chip-on: rgba(255, 210, 150, 0.22);
+    --chip-on-line: rgba(255, 220, 170, 0.8);
+    --sun: #ffd76a;
+    --label: rgba(220, 228, 255, 0.82);
+    --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--space);
+    color: var(--ink);
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--mono);
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #labels { position: fixed; inset: 0; pointer-events: none; }
+  .lbl {
+    position: absolute; left: 0; top: 0;
+    font: 10px/1.2 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--label);
+    white-space: nowrap;
+    text-shadow: 0 0 6px var(--space), 0 0 3px var(--space);
+    will-change: transform;
+  }
+  .lbl.arm { font: italic 15px/1.1 var(--serif); letter-spacing: 0.02em; text-transform: none; color: rgba(200, 215, 255, 0.72); }
+  .lbl.sun { color: var(--sun); }
+  .lbl.sun::before {
+    content: ""; position: absolute; left: -15px; top: -1px;
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid var(--sun);
+    box-shadow: 0 0 8px var(--sun);
+  }
+  .card {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    max-width: 22rem;
+    pointer-events: none;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .card h1 {
+    margin: 0;
+    font: 500 34px/1 var(--serif);
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .card p {
+    margin: 0;
+    font: 10.5px/1.6 var(--mono);
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .bottom {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    pointer-events: none;
+  }
+  .scale { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 10px/1 var(--mono); letter-spacing: 0.1em; color: var(--muted); }
+  .scale i { display: block; height: 5px; border: 1px solid var(--muted); border-top: 0; }
+  .hint { font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center; text-shadow: 0 0 6px var(--space); }
+  .tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: auto; }
+  .tools button {
+    font: 12px/1 var(--mono); letter-spacing: 0.05em;
+    color: var(--ink); background: var(--chip);
+    border: 1px solid var(--chip-line); border-radius: 999px;
+    padding: 9px 12px; cursor: pointer;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .tools button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
+  .tools button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
+  .nogl { position: fixed; inset: 0; display: grid; place-items: center; padding-inline: 16px; text-align: center; color: var(--muted); font: 13px/1.6 var(--mono); }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400&display=swap">
+
+<canvas id="bg"></canvas>
+<canvas id="gl"></canvas>
+<div id="labels"></div>
+
+<div class="card">
+  <h1>Млечный Путь</h1>
+  <p>Спиральная галактика с перемычкой · диаметр ≈ 100&nbsp;000&nbsp;св.&nbsp;лет · 100–400&nbsp;млрд звёзд · Солнце в&nbsp;26&nbsp;000&nbsp;св.&nbsp;лет от&nbsp;центра · один оборот Солнца ≈ 230&nbsp;млн&nbsp;лет</p>
+</div>
+
+<div class="bottom">
+  <div class="scale" id="scale"><i id="scale-bar" style="width:80px"></i><span>10 000 СВ. ЛЕТ</span></div>
+  <div class="hint">ПРОВЕДИ — ПОВЕРНУТЬ · ЩИПОК ИЛИ КОЛЕСО — МАСШТАБ</div>
+  <div class="tools" role="toolbar" aria-label="Вид">
+    <button id="v-top" data-tilt="0" aria-pressed="false">Сверху</button>
+    <button id="v-angle" data-tilt="1.0" aria-pressed="true">Под углом</button>
+    <button id="v-edge" data-tilt="1.54" aria-pressed="false">С ребра</button>
+    <button id="t-labels" aria-pressed="true">Подписи</button>
+    <button id="t-pause" aria-pressed="false">Пауза</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const glc = document.getElementById('gl');
+  const bgc = document.getElementById('bg');
+  const gl = glc.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
+  if (!gl) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="nogl">Этому браузеру недоступен WebGL. Откройте страницу в Safari, Chrome или Firefox.</div>');
+    return;
+  }
+
+  // ---------- random helpers ----------
+  const TAU = Math.PI * 2, DEG = Math.PI / 180;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[(Math.random() * a.length) | 0];
+  function gauss() {
+    let u = 0, v = 0;
+    while (!u) u = Math.random();
+    while (!v) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  }
+  const hex = h => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+
+  const small = Math.min(innerWidth, innerHeight) < 600;
+  const Q = small ? 0.55 : 1;   // particle budget
+
+  // ---------- galaxy model (units: kiloparsecs; screen-style axes, y points toward the Sun) ----------
+  // Bar: ~4.5 kpc half-length, its near end 27° from the Sun–centre line toward l = +90°.
+  const BAR = 117 * DEG;
+  // Logarithmic arms with a 12.5° pitch; t0/r0 put each arm where surveys place it in the Sun's direction.
+  const K = 1 / Math.tan(12.5 * DEG);
+  const ARMS = [
+    { name: 'Рукав Щита — Центавра', t0: 117 * DEG, r0: 4.5, w: 1.0, rMax: 17, labelR: 9.5 },
+    { name: 'Рукав Персея',           t0: 297 * DEG, r0: 4.5, w: 1.0, rMax: 16, labelR: 13.2 },
+    { name: 'Рукав Стрельца',         t0: 207 * DEG, r0: 4.2, w: 0.6, rMax: 14, labelR: 9 },
+    { name: 'Внешний рукав',          t0: 27 * DEG,  r0: 4.2, w: 0.55, rMax: 16, labelR: 14.5 },
+  ];
+  const SPUR = { name: 'Рукав Ориона', t0: 90 * DEG, r0: 8.3, w: 0.22, rMin: 7.3, rMax: 9.4 };
+  const SUN = [0, 8.2, 0.02];
+  const armTheta = (a, r) => a.t0 - Math.log(r / a.r0) * K;
+  const armXY = (a, r) => { const t = armTheta(a, r); return [r * Math.cos(t), r * Math.sin(t)]; };
+
+  const groups = { glow: [], dust: [], bright: [] };
+  const push = (g, x, y, z, c, a, s) => groups[g].push(x, y, z, c[0], c[1], c[2], a, s);
+
+  const OLD = ['#fff3e0', '#ffe6c4', '#ffd9a8', '#f4ecff'].map(hex);
+  const YOUNG = ['#ffffff', '#dfe8ff', '#bcd0ff', '#9fb8ff', '#cfe0ff'].map(hex);
+  const CORE = ['#ffe8c0', '#ffd79a', '#ffc884', '#fff0d8'].map(hex);
+  const HII = ['#ff5c9a', '#ff7fb0', '#ff9ac2', '#ff6f8f'].map(hex);
+  const DUST = hex('#140a06');
+
+  // thin old disk, exponential with a 3 kpc scale length
+  for (let i = 0; i < 46000 * Q; i++) {
+    let r = -Math.log(1 - Math.random() * 0.995) * 3.2;
+    if (r > 17) continue;
+    const t = Math.random() * TAU;
+    push('glow', r * Math.cos(t), r * Math.sin(t), gauss() * 0.18 * (1 + r / 10), pick(OLD), rnd(0.18, 0.34), rnd(0.9, 1.6));
+  }
+  // bar
+  for (let i = 0; i < 12000 * Q; i++) {
+    const u = Math.max(-4.6, Math.min(4.6, gauss() * 1.7)), v = gauss() * 0.7 * (1 - Math.abs(u) / 7);
+    const x = u * Math.cos(BAR) - v * Math.sin(BAR), y = u * Math.sin(BAR) + v * Math.cos(BAR);
+    push('glow', x, y, gauss() * 0.3, pick(CORE), rnd(0.14, 0.28), rnd(1.1, 2));
+  }
+  // bulge
+  for (let i = 0; i < 9000 * Q; i++) {
+    const r = Math.abs(gauss()) * 1.1, t = Math.random() * TAU, ph = Math.acos(rnd(-1, 1));
+    push('glow', r * Math.sin(ph) * Math.cos(t), r * Math.sin(ph) * Math.sin(t), r * Math.cos(ph) * 0.65, pick(CORE), rnd(0.15, 0.3), rnd(1.2, 2.2));
+  }
+  for (let i = 0; i < 40; i++) push('bright', gauss() * 0.25, gauss() * 0.25, gauss() * 0.15, hex('#ffe2b0'), 0.05, rnd(30, 60));
+
+  function armRadius(a, rMin) {
+    for (;;) {
+      const r = rMin + -Math.log(1 - Math.random()) * 5;
+      if (r < a.rMax) return r;
+    }
+  }
+  function addArm(a, rMin) {
+    const n = 26000 * Q * a.w;
+    for (let i = 0; i < n; i++) {
+      const r = armRadius(a, rMin), [x, y] = armXY(a, r), wd = 0.22 + 0.045 * r;
+      const wide = Math.random() < 0.5;
+      const sp = wide ? wd * 2.2 : wd * 1.15;
+      const px = x + gauss() * sp, py = y + gauss() * sp, pz = gauss() * 0.1;
+      if (!wide && Math.random() < 0.04) push('bright', px, py, pz, pick(YOUNG), rnd(0.4, 0.7), rnd(2, 3.2));
+      else push('glow', px, py, pz, wide ? pick(OLD) : pick(YOUNG), wide ? rnd(0.12, 0.22) : rnd(0.26, 0.5), rnd(0.9, 1.9));
+    }
+    // star-forming regions: pink hydrogen knots with a few hot blue stars
+    for (let c = 0; c < 30 * Q * a.w; c++) {
+      const r = armRadius(a, rMin), [x, y] = armXY(a, r);
+      const cx = x + gauss() * 0.2, cy = y + gauss() * 0.2;
+      for (let j = 0; j < 14; j++) push('bright', cx + gauss() * 0.15, cy + gauss() * 0.15, gauss() * 0.04, pick(HII), rnd(0.18, 0.36), rnd(1.6, 3.2));
+      for (let j = 0; j < 2; j++) push('bright', cx + gauss() * 0.1, cy + gauss() * 0.1, 0, YOUNG[0], 0.7, rnd(2, 3));
+    }
+    // dust lane on the inner edge of the arm
+    for (let i = 0; i < 9000 * Q * a.w; i++) {
+      const r = armRadius(a, rMin), t = armTheta(a, r), rd = r - 0.32 - 0.02 * r;
+      if (r > a.rMax * 0.72) continue;   // dust thins out before the stars do
+      push('dust', rd * Math.cos(t) + gauss() * 0.13, rd * Math.sin(t) + gauss() * 0.13, gauss() * 0.05, DUST, rnd(0.2, 0.38), rnd(6, 13));
+    }
+  }
+  ARMS.forEach(a => addArm(a, a.r0));
+  // Orion spur: a short bridge between Sagittarius and Perseus, where the Sun lives
+  (() => {
+    const n = 26000 * Q * SPUR.w;
+    for (let i = 0; i < n; i++) {
+      const r = rnd(SPUR.rMin, SPUR.rMax), [x, y] = armXY(SPUR, r);
+      push('glow', x + gauss() * 0.3, y + gauss() * 0.3, gauss() * 0.1, pick(YOUNG), rnd(0.25, 0.5), rnd(0.9, 1.8));
+    }
+    for (let i = 0; i < 1500 * Q; i++) {
+      const r = rnd(SPUR.rMin, SPUR.rMax), t = armTheta(SPUR, r), rd = r - 0.25;
+      push('dust', rd * Math.cos(t) + gauss() * 0.12, rd * Math.sin(t) + gauss() * 0.12, gauss() * 0.04, DUST, rnd(0.16, 0.3), rnd(6, 11));
+    }
+  })();
+  // dust ring around the bar (the 3-kpc arms region)
+  for (let i = 0; i < 5000 * Q; i++) {
+    const t = Math.random() * TAU, r = 3.6 + gauss() * 0.35;
+    push('dust', r * Math.cos(t) * 1.15, r * Math.sin(t) * 0.85, gauss() * 0.05, DUST, rnd(0.16, 0.3), rnd(6, 12));
+  }
+  // globular clusters in the halo
+  for (let i = 0; i < 150; i++) {
+    const r = Math.abs(gauss()) * 9 + 1, t = Math.random() * TAU, ph = Math.acos(rnd(-1, 1));
+    push('bright', r * Math.sin(ph) * Math.cos(t), r * Math.sin(ph) * Math.sin(t), r * Math.cos(ph), hex('#ffe9c8'), 0.7, rnd(1.6, 2.6));
+  }
+
+  // ---------- WebGL ----------
+  const VS = `
+    attribute vec3 aP; attribute vec4 aC; attribute float aS;
+    uniform float uRot, uTilt, uZoom, uDpr, uSizeK, uGain; uniform vec2 uView, uPan;
+    varying vec4 vC;
+    void main() {
+      float c = cos(uRot), s = sin(uRot);
+      vec3 p = vec3(aP.x * c - aP.y * s, aP.x * s + aP.y * c, aP.z);
+      float ct = cos(uTilt), st = sin(uTilt);
+      float qy = p.y * ct - p.z * st, qz = p.y * st + p.z * ct;
+      float persp = 70.0 / (70.0 - qz);
+      vec2 px = vec2(p.x, qy) * uZoom * persp + uPan;
+      gl_Position = vec4(px.x * 2.0 / uView.x, -px.y * 2.0 / uView.y, 0.0, 1.0);
+      gl_PointSize = max(1.0, aS * uDpr * uSizeK * persp);
+      vC = vec4(aC.rgb, min(1.0, aC.a * uGain));
+    }`;
+  const FS = `
+    precision mediump float; varying vec4 vC;
+    void main() {
+      vec2 d = gl_PointCoord - 0.5;
+      float a = exp(-dot(d, d) * 14.0) * vC.a;
+      gl_FragColor = vec4(vC.rgb * a, a);
+    }`;
+  function sh(type, src) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const loc = n => gl.getAttribLocation(prog, n);
+  const U = {};
+  ['uRot', 'uTilt', 'uZoom', 'uDpr', 'uSizeK', 'uGain', 'uView', 'uPan'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  const aP = loc('aP'), aC = loc('aC'), aS = loc('aS');
+  gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aC); gl.enableVertexAttribArray(aS);
+
+  const bufs = {};
+  for (const k in groups) {
+    const data = new Float32Array(groups[k]);
+    const b = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    bufs[k] = { b, n: data.length / 8 };
+    groups[k] = null;
+  }
+  function drawGroup(k) {
+    const { b, n } = bufs[k];
+    gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 32, 0);
+    gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 32, 12);
+    gl.vertexAttribPointer(aS, 1, gl.FLOAT, false, 32, 28);
+    gl.drawArrays(gl.POINTS, 0, n);
+  }
+
+  // ---------- view state ----------
+  let W, H, DPR, zoom0, zoom;
+  let rot = 0.35, tilt = 1.0, targetTilt = null, spinV = 0, paused = false;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) paused = true;
+
+  function resize() {
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    for (const c of [glc, bgc]) { c.width = W * DPR; c.height = H * DPR; }
+    gl.viewport(0, 0, W * DPR, H * DPR);
+    const z = Math.min(W, H * 1.3) / 2 / 15;
+    zoom = zoom0 ? zoom * z / zoom0 : z;
+    zoom0 = z;
+    drawBackground();
+  }
+  function drawBackground() {
+    const c = bgc.getContext('2d');
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    c.fillStyle = '#020208'; c.fillRect(0, 0, W, H);
+    for (let i = 0; i < W * H / 900; i++) {
+      c.globalAlpha = Math.random() * 0.6 + 0.1;
+      c.fillStyle = pick(['#ffffff', '#cfd8ff', '#ffe8cc']);
+      const s = Math.random() < 0.05 ? 1.4 : 0.7;
+      c.fillRect(Math.random() * W, Math.random() * H, s, s);
+    }
+    // a few distant galaxies
+    for (let i = 0; i < 6; i++) {
+      const x = Math.random() * W, y = Math.random() * H, r = rnd(3, 7);
+      c.save(); c.translate(x, y); c.rotate(Math.random() * 3); c.scale(1, rnd(0.3, 0.8));
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, 'rgba(255,240,220,0.5)'); g.addColorStop(1, 'rgba(255,240,220,0)');
+      c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fill(); c.restore();
+    }
+    c.globalAlpha = 1;
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // same projection as the vertex shader, for HTML labels
+  function project(x, y, z) {
+    const c = Math.cos(rot), s = Math.sin(rot);
+    const px = x * c - y * s, py = x * s + y * c;
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    const qy = py * ct - z * st, qz = py * st + z * ct;
+    const k = 70 / (70 - qz);
+    return [W / 2 + px * zoom * k, H / 2 + qy * zoom * k];
+  }
+
+  // ---------- labels ----------
+  const labelsEl = document.getElementById('labels');
+  const labels = [];
+  function addLabel(text, cls, pos, dx = 0, dy = 0) {
+    const el = document.createElement('div');
+    el.className = 'lbl ' + cls; el.textContent = text;
+    labelsEl.appendChild(el);
+    labels.push({ el, pos, dx, dy, arm: cls === 'arm' });
+  }
+  addLabel('Солнце', 'sun', SUN, 14, -5);
+  addLabel('Центр · Стрелец A*', '', [0, 0, 0], 10, -18);
+  ARMS.forEach(a => { const [x, y] = armXY(a, a.labelR); addLabel(a.name, 'arm', [x, y, 0], -40, -8); });
+  { const [x, y] = armXY(SPUR, 8.9); addLabel(SPUR.name, 'arm', [x + 0.6, y + 0.9, 0], -30, 6); }
+
+  // ---------- controls ----------
+  const viewBtns = [...document.querySelectorAll('[data-tilt]')];
+  viewBtns.forEach(b => b.addEventListener('click', () => {
+    targetTilt = parseFloat(b.dataset.tilt);
+    viewBtns.forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  }));
+  const lblBtn = document.getElementById('t-labels');
+  lblBtn.addEventListener('click', () => {
+    labelsEl.hidden = !labelsEl.hidden;
+    lblBtn.setAttribute('aria-pressed', String(!labelsEl.hidden));
+  });
+  const pauseBtn = document.getElementById('t-pause');
+  pauseBtn.setAttribute('aria-pressed', String(paused));
+  pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.setAttribute('aria-pressed', String(paused)); });
+
+  const pts = new Map();
+  let pinch0 = null;
+  glc.addEventListener('pointerdown', e => {
+    glc.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    targetTilt = null;
+    viewBtns.forEach(o => o.setAttribute('aria-pressed', 'false'));
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom }; }
+  });
+  glc.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (pts.size === 1) {
+      spinV = dx * 0.006;
+      rot += spinV;
+      tilt = Math.max(0, Math.min(1.56, tilt + dy * 0.006));
+    } else if (pts.size === 2 && pinch0) {
+      const [a, b] = [...pts.values()];
+      setZoom(pinch0.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d);
+    }
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = null; };
+  glc.addEventListener('pointerup', up);
+  glc.addEventListener('pointercancel', up);
+  glc.addEventListener('wheel', e => { e.preventDefault(); setZoom(zoom * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+  const setZoom = z => { zoom = Math.max(zoom0 * 0.5, Math.min(zoom0 * 6, z)); };
+
+  const scaleBar = document.getElementById('scale-bar');
+  const KPC_PER_10K_LY = 10000 / 3261.56;
+
+  // ---------- frame ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (!pts.size) { rot += spinV; spinV *= 0.93; if (!paused) rot += dt * 0.03; }
+    if (targetTilt !== null) { tilt += (targetTilt - tilt) * Math.min(1, dt * 4); if (Math.abs(targetTilt - tilt) < 0.001) targetTilt = null; }
+
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(U.uRot, rot);
+    gl.uniform1f(U.uTilt, tilt);
+    gl.uniform1f(U.uZoom, zoom);
+    gl.uniform1f(U.uDpr, DPR);
+    gl.uniform1f(U.uSizeK, Math.max(0.7, Math.min(2.4, Math.sqrt(zoom / zoom0))));
+    gl.uniform2f(U.uView, W, H);
+    gl.uniform2f(U.uPan, 0, 0);
+    // seen edge-on, stars pile up along the line of sight: dim them and let the dust lane show
+    const edge = Math.pow(Math.sin(tilt), 4);
+    gl.enable(gl.BLEND);
+    gl.uniform1f(U.uGain, 1 - 0.6 * edge);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    drawGroup('glow');
+    gl.uniform1f(U.uGain, 1 + 1.5 * edge);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    drawGroup('dust');
+    gl.uniform1f(U.uGain, 1 - 0.5 * edge);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    drawGroup('bright');
+
+    if (!labelsEl.hidden) {
+      const armsVisible = tilt < 1.25;
+      for (const l of labels) {
+        l.el.hidden = l.arm && !armsVisible;
+        if (l.el.hidden) continue;
+        const [x, y] = project(...l.pos);
+        l.el.style.transform = `translate(${(x + l.dx).toFixed(1)}px, ${(y + l.dy).toFixed(1)}px)`;
+      }
+    }
+    scaleBar.style.width = (KPC_PER_10K_LY * zoom).toFixed(0) + 'px';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
