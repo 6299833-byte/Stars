@@ -191,7 +191,7 @@
     { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 3.6, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
       rot: 0.99727, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
       facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
-      note: 'Единственная известная планета с жизнью. На ночной стороне видны огни городов.',
+      note: 'Единственная известная планета с жизнью. Вокруг летают станции МКС и Тяньгун, телескоп Хаббл и тысячи спутников; на ночной стороне горят города.',
       moons: [{ name: 'Луна', a: 60.3, P: 27.32, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
     { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 2.8, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
       rot: 1.02596, tiltAx: 25.19, p1: 0.0694, halo: '255,150,110',
@@ -404,7 +404,7 @@
       drawPlanetOverview(p);
     }
     if (!sunDrawn) drawSunOverview();
-    if (showNames) drawNamesOverview();
+    if (showNames) { drawNamesOverview(); drawProbes(); }
   }
 
   // =====================================================================
@@ -524,9 +524,100 @@
     // solar prominences
     const flares = b.isSun ? Array.from({ length: small ? 500 : 900 }, () => newFlare(true)) : [];
     const n = parts.length;
-    b.close = { N, pts, col, city, clouds, parts, moons, fit, flares,
+    const satl = b.id === 'earth' ? buildSatellites() : null;
+    if (satl) Object.assign(satl, { px: new Float32Array(satl.n), py: new Float32Array(satl.n), pd: new Float32Array(satl.n), pa: new Float32Array(satl.n) });
+    b.close = { N, pts, col, city, clouds, parts, moons, fit, flares, satl,
       px: new Float32Array(n), py: new Float32Array(n), pd: new Float32Array(n), pa: new Float32Array(n) };
     return b.close;
+  }
+
+  // ---------- Earth's artificial satellites ----------
+  // Simulated constellations with real altitudes, inclinations and periods. Live positions would need
+  // tracking data the page cannot load, so each satellite starts at a spread-out position.
+  // Altitude is compressed so low orbits hug the planet and the geostationary ring sits inside the Moon's orbit.
+  const satR = altKm => 1 + 0.42 * Math.log(1 + altKm / 1000);
+  const periodDays = altKm => { const a = 6371 + altKm; return TAU * Math.sqrt(a * a * a / 398600.4418) / 86400; };
+  function orbitOf(altKm, incDeg, raan, u) {
+    const i = incDeg * DEG;
+    return { r: satR(altKm), ci: Math.cos(i), si: Math.sin(i), co: Math.cos(raan), so: Math.sin(raan), u, w: TAU / periodDays(altKm) };
+  }
+  function buildSatellites() {
+    const sats = [];
+    const shell = (n, planes, alt, inc, c, sz, o) => {
+      n = Math.round(n);
+      for (let k = 0; k < n; k++) {
+        const pl = k % planes;
+        const q = orbitOf(alt + gauss() * 6, inc, pl / planes * TAU, (k / n) * TAU * 7.3 + pl * 0.37);
+        q.c = c; q.s = sz; q.o = o; sats.push(q);
+      }
+    };
+    const k = small ? 0.6 : 1;
+    shell(1100 * k, 72, 550, 53, '#dfe8ff', 0.9, 0.55);   // Starlink main shells
+    shell(350 * k, 36, 570, 70, '#dfe8ff', 0.9, 0.5);
+    shell(250 * k, 18, 560, 97.6, '#dfe8ff', 0.9, 0.5);
+    shell(300 * k, 18, 1200, 87.9, '#bfe0ff', 0.9, 0.45);  // OneWeb
+    shell(400 * k, 60, 700, 98, '#c8c8d8', 0.8, 0.4);      // Earth observation, sun-synchronous
+    shell(31, 6, 20200, 55, '#7dffb0', 1.7, 0.95);         // GPS
+    shell(24, 3, 19100, 64.8, '#ff9d7d', 1.7, 0.95);       // GLONASS
+    shell(28, 3, 23222, 56, '#7dc8ff', 1.7, 0.95);         // Galileo
+    shell(30, 3, 21528, 55, '#ffd97d', 1.7, 0.9);          // BeiDou
+    shell(560 * k, 1, 35786, 0.05, '#ffc46b', 1.1, 0.75);  // geostationary ring: one orbit per sidereal day, so it hangs over the same spot
+    const stations = [
+      Object.assign(orbitOf(420, 51.64, 1.1, 0), { name: 'МКС', big: true }),
+      Object.assign(orbitOf(385, 41.47, 3.9, 2.2), { name: 'Тяньгун', big: true }),
+      Object.assign(orbitOf(525, 28.47, 5.2, 4.1), { name: 'Хаббл' }),
+    ];
+    return { sats, stations, n: sats.length };
+  }
+  // orbit-plane position -> body-frame vector (y = north pole)
+  function orbitVec(q) {
+    const x0 = q.r * Math.cos(q.u), z0 = q.r * Math.sin(q.u), zc = z0 * q.ci;
+    return [x0 * q.co + zc * q.so, -z0 * q.si, -x0 * q.so + zc * q.co];
+  }
+
+  // a marker with a label; off-screen targets are pinned to the edge with an arrow
+  function edgeMarker(x, y, label, col, A) {
+    const m = 14, top = 150, bottom = H - 120;
+    const inside = x > m && x < W - m && y > top && y < bottom;
+    ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = A;
+    if (inside) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(x, y - 3.5); ctx.lineTo(x + 3.5, y); ctx.lineTo(x, y + 3.5); ctx.lineTo(x - 3.5, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(205,215,245,0.85)';
+      const w = ctx.measureText(label).width;
+      if (x + 8 + w > W - 8) ctx.fillText(label, x - w + 4, y + 13);   // no room on the right: put it underneath
+      else ctx.fillText(label, x + 8, y);
+    } else {
+      const cx = W / 2, cy = (top + bottom) / 2, dx = x - cx, dy = y - cy;
+      const k = Math.min((W / 2 - m) / Math.abs(dx || 1e-6), ((bottom - top) / 2) / Math.abs(dy || 1e-6));
+      const ex = cx + dx * k, ey = cy + dy * k, ang = Math.atan2(dy, dx);
+      ctx.fillStyle = col;
+      ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-8, -4); ctx.lineTo(-8, 4); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = 'rgba(205,215,245,0.85)';
+      const w = ctx.measureText(label).width;
+      const lx = clamp(ex - Math.cos(ang) * 14 - (Math.cos(ang) > 0 ? w : 0), 8, W - 8 - w);
+      ctx.fillText(label, lx, clamp(ey - Math.sin(ang) * 14, top, bottom));
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // deep-space probes, approximate: distance grows at each probe's cruise rate from its early-2025 value
+  const PROBES = [
+    { name: 'Вояджер-1', au0: 164.6, rate: 3.57, lon: 255, lat: 35 },
+    { name: 'Вояджер-2', au0: 137.7, rate: 3.23, lon: 290, lat: -35 },
+    { name: 'Новые горизонты', au0: 60.9, rate: 2.9, lon: 290, lat: 2 },
+  ];
+  function drawProbes() {
+    const yrs = (days - 9131.5) / 365.25;   // 9131.5 days = 1 January 2025 from J2000
+    for (const pr of PROBES) {
+      const au = pr.au0 + pr.rate * yrs, d = dist(au), lo = pr.lon * DEG, la = pr.lat * DEG;
+      const [x, y] = project(d * Math.cos(lo) * Math.cos(la), d * Math.sin(la), -d * Math.sin(lo) * Math.cos(la));
+      edgeMarker(x, y, `${pr.name.toUpperCase()} · ${Math.round(au)} А. Е.`, '#9fe8ff', 1);
+    }
   }
 
   function newFlare(randomAge) {
@@ -629,6 +720,55 @@
       }
     };
 
+    // --- artificial satellites (Earth only) ---
+    const S = C.satl;
+    if (S) {
+      const all = S.sats;
+      for (let i = 0; i < all.length; i++) {
+        const q = all[i];
+        q.u += q.w * dDays;
+        const [bx, by, bz] = orbitVec(q);
+        const X = T[0] * bx + T[1] * by + T[2] * bz, Y = T[3] * bx + T[4] * by + T[5] * bz, Z = T[6] * bx + T[7] * by + T[8] * bz;
+        const dl = X * Lw[0] + Y * Lw[1] + Z * Lw[2];
+        const shade = dl < 0 && X * X + Y * Y + Z * Z - dl * dl < 1 ? 0.15 : 1;   // Earth's shadow
+        S.px[i] = Mc[0] * X + Mc[1] * Y + Mc[2] * Z; S.py[i] = Mc[3] * X + Mc[4] * Y + Mc[5] * Z; S.pd[i] = Mc[6] * X + Mc[7] * Y + Mc[8] * Z;
+        S.pa[i] = q.o * shade * A;
+      }
+      for (const st of S.stations) {
+        st.u += st.w * dDays;
+        const [bx, by, bz] = orbitVec(st);
+        const X = T[0] * bx + T[1] * by + T[2] * bz, Y = T[3] * bx + T[4] * by + T[5] * bz, Z = T[6] * bx + T[7] * by + T[8] * bz;
+        const dl = X * Lw[0] + Y * Lw[1] + Z * Lw[2];
+        st.lit = !(dl < 0 && X * X + Y * Y + Z * Z - dl * dl < 1);
+        st.sx = Mc[0] * X + Mc[1] * Y + Mc[2] * Z; st.sy = Mc[3] * X + Mc[4] * Y + Mc[5] * Z; st.sd = Mc[6] * X + Mc[7] * Y + Mc[8] * Z;
+      }
+    }
+    const satPass = front => {
+      if (!S) return;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < S.n; i++) {
+        if ((S.pd[i] >= 0) !== front) continue;
+        if (!front && S.px[i] * S.px[i] + S.py[i] * S.py[i] < 1) continue;   // hidden behind the disc
+        ctx.globalAlpha = S.pa[i]; ctx.fillStyle = S.sats[i].c;
+        const z = S.sats[i].s;
+        ctx.fillRect(S.px[i] * R - z / 2, S.py[i] * R - z / 2, z, z);
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      for (const st of S.stations) {
+        if ((st.sd >= 0) !== front) continue;
+        if (!front && st.sx * st.sx + st.sy * st.sy < 1) continue;
+        const x = st.sx * R, y = st.sy * R;
+        ctx.globalAlpha = A * (st.lit ? 1 : 0.35);
+        // body and solar-panel wings
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+        ctx.fillStyle = st.big ? '#7fb6ff' : '#e8e8e8';
+        if (st.big) { ctx.fillRect(x - 7, y - 1, 4.5, 2); ctx.fillRect(x + 2.5, y - 1, 4.5, 2); }
+        else ctx.fillRect(x - 1, y - 4, 2, 2.5);
+        ctx.globalAlpha = 1;
+      }
+    };
+
     // --- glow behind the body ---
     ctx.globalCompositeOperation = 'lighter';
     const haloCol = b.isSun ? '255,150,50' : b.halo;
@@ -641,6 +781,7 @@
     orbitPass(false);
     partPass(false);
     moonPass(false);
+    satPass(false);
 
     // --- the body: dark disc, then surface particles lit by the Sun ---
     ctx.globalAlpha = A;
@@ -713,6 +854,7 @@
 
     partPass(true);
     orbitPass(true);
+    satPass(true);
     moonPass(true);
 
     if (showNames && C.moons.length) {
@@ -723,6 +865,15 @@
         const hidden = m.sd < 0 && m.sx * m.sx + m.sy * m.sy < 1;   // behind the planet
         if (hidden) continue;
         ctx.fillText(m.name.toUpperCase(), m.sx * R + Math.max(1.6, m.size * R) + 5, m.sy * R);
+      }
+    }
+    if (showNames && S) {
+      ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
+      ctx.textBaseline = 'middle';
+      for (const st of S.stations) {
+        if (st.sd < 0 && st.sx * st.sx + st.sy * st.sy < 1) continue;
+        ctx.fillStyle = `rgba(255,225,170,${(0.95 * A).toFixed(3)})`;
+        ctx.fillText(st.name.toUpperCase(), st.sx * R + 9, st.sy * R - 7);
       }
     }
   }
@@ -887,6 +1038,13 @@
       ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * cxp, DPR * cyp);
       drawClose(sel, e, dDays, t);
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      if (sel.id === 'earth' && showNames && e > 0.9) {
+        // James Webb Space Telescope at Sun–Earth L2, 1.5 million km straight away from the Sun
+        const [x, , z] = planetPos(sel), l = Math.hypot(x, z);
+        const Mc = camM(cYaw, cTilt), k = 4.6 * closeR * cZoom * sc;
+        const wx = x / l, wz = z / l;
+        edgeMarker(cxp + (Mc[0] * wx + Mc[2] * wz) * k, cyp + (Mc[3] * wx + Mc[5] * wz) * k, 'УЭББ · L2, 1,5 МЛН КМ', '#ffd27a', e);
+      }
     }
 
     const ds = (closeTarget ? fmtTime : fmtDay).format(new Date(J2000 + days * 86400000));
