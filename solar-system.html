@@ -1,0 +1,500 @@
+<title>Солнечная система</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: full-bleed orrery canvas; name and date top-left, planet card and time controls at the bottom */
+  :root {
+    --space: #020309;
+    --ink: #e6ecff;
+    --muted: rgba(190, 205, 240, 0.6);
+    --chip: rgba(14, 18, 38, 0.74);
+    --chip-line: rgba(140, 170, 255, 0.22);
+    --chip-on: rgba(255, 190, 90, 0.2);
+    --chip-on-line: rgba(255, 205, 130, 0.85);
+    --card: rgba(10, 14, 32, 0.82);
+    --sun: #ffc35a;
+    --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--space);
+    color: var(--ink);
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--mono);
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .head {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: max(16px, env(safe-area-inset-right, 0px));
+    pointer-events: none;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .head h1 { margin: 0; font: 500 32px/1 var(--serif); text-wrap: balance; }
+  .head p { margin: 0; font: 11px/1.5 var(--mono); letter-spacing: 0.08em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bottom {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    pointer-events: none;
+  }
+  .card {
+    pointer-events: auto;
+    width: 100%; max-width: 26rem; box-sizing: border-box;
+    background: var(--card);
+    border: 1px solid var(--chip-line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .card h2 { margin: 0; font: 500 26px/1 var(--serif); }
+  .card .close { font: 12px/1 var(--mono); color: var(--muted); background: none; border: 0; padding: 6px; cursor: pointer; }
+  .card dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+  .card dt { font: 9.5px/1.2 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .card dd { margin: 2px 0 0; font: 13px/1.3 var(--mono); font-variant-numeric: tabular-nums; }
+  .card p { margin: 0; font: italic 16px/1.35 var(--serif); color: var(--ink); }
+  .hint { font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center; text-shadow: 0 0 6px var(--space); }
+  .tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: auto; }
+  .tools button {
+    font: 12px/1 var(--mono); letter-spacing: 0.04em;
+    color: var(--ink); background: var(--chip);
+    border: 1px solid var(--chip-line); border-radius: 999px;
+    padding: 9px 12px; cursor: pointer;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .tools button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
+  button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400&display=swap">
+
+<canvas id="sky"></canvas>
+
+<div class="head">
+  <h1>Солнечная система</h1>
+  <p id="date">—</p>
+  <p>Положения планет на эту дату · расстояния и размеры сжаты</p>
+</div>
+
+<div class="bottom">
+  <section class="card" id="card" hidden aria-live="polite">
+    <div class="card-top">
+      <h2 id="c-name">Земля</h2>
+      <button class="close" id="c-close" aria-label="Закрыть">ЗАКРЫТЬ ✕</button>
+    </div>
+    <dl id="c-facts"></dl>
+    <p id="c-note"></p>
+  </section>
+  <div class="hint" id="hint">НАЖМИ НА ПЛАНЕТУ · ПРОВЕДИ — ПОВЕРНУТЬ · ЩИПОК — МАСШТАБ</div>
+  <div class="tools" role="toolbar" aria-label="Скорость времени">
+    <button id="s-0" data-speed="0" aria-pressed="false">Пауза</button>
+    <button id="s-1" data-speed="1" aria-pressed="false">1 день/с</button>
+    <button id="s-10" data-speed="10" aria-pressed="true">10 дней/с</button>
+    <button id="s-100" data-speed="100" aria-pressed="false">100 дней/с</button>
+    <button id="s-now" data-action="now">Сегодня</button>
+    <button id="t-names" aria-pressed="true">Названия</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('sky');
+  const ctx = cv.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const TAU = Math.PI * 2, DEG = Math.PI / 180;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = a => a[(Math.random() * a.length) | 0];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
+  let W, H, DPR, zoom0, zoom, small;
+  function resize() {
+    DPR = Math.min(devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * DPR; cv.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    small = Math.min(W, H) < 600;
+    const z = Math.min(W, H * 1.4) / 2 / 6.7;
+    zoom = zoom0 ? zoom * z / zoom0 : z;
+    zoomTarget = zoomTarget ? zoomTarget * z / zoom0 : z;
+    zoom0 = z;
+  }
+  let zoomTarget = 0;
+  addEventListener('resize', resize);
+  resize();
+
+  // Real orbit sizes are compressed so Mercury and Neptune fit on one screen
+  const dist = a => 0.95 + 1.3 * Math.log(1 + a * 1.2);
+
+  // Mean longitude at J2000 (deg) and its daily rate: circular-orbit approximation of the real positions
+  const PLANETS = [
+    { id: 'mercury', name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.2, col: ['#e6dfd6', '#a79d93', '#4a4440'],
+      facts: [['Диаметр', '4 879 км'], ['От Солнца', '0,39 а. е.'], ['Год', '88 дней'], ['Спутники', '0']],
+      note: 'Самая маленькая планета. Солнечные сутки на ней длятся 176 земных дней, дольше её года.' },
+    { id: 'venus', name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 3.4, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
+      facts: [['Диаметр', '12 104 км'], ['От Солнца', '0,72 а. е.'], ['Год', '225 дней'], ['Спутники', '0']],
+      note: 'Самая горячая планета: под плотными облаками около 465 °C.' },
+    { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 3.6, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
+      facts: [['Диаметр', '12 742 км'], ['От Солнца', '1 а. е. = 150 млн км'], ['Год', '365,25 дня'], ['Спутники', '1']],
+      note: 'Единственная известная планета с жизнью. Свет Солнца идёт до неё 8 минут 20 секунд.' },
+    { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 2.8, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
+      facts: [['Диаметр', '6 779 км'], ['От Солнца', '1,52 а. е.'], ['Год', '687 дней'], ['Спутники', '2']],
+      note: 'Здесь гора Олимп, высочайший вулкан Солнечной системы, около 22 км.' },
+    { id: 'jupiter', name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 8, col: ['#fff0dc', '#d9b38c', '#5e4026'],
+      facts: [['Диаметр', '139 820 км'], ['От Солнца', '5,2 а. е.'], ['Год', '11,9 лет'], ['Спутники', '95']],
+      note: 'Большое Красное Пятно — шторм шире всей Земли, бушующий сотни лет.' },
+    { id: 'saturn', name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 7, col: ['#fff6dc', '#e3c98f', '#6a5326'],
+      facts: [['Диаметр', '116 460 км'], ['От Солнца', '9,5 а. е.'], ['Год', '29,5 лет'], ['Спутники', '274']],
+      note: 'Плотность меньше, чем у воды. Кольца в поперечнике около 280\u00a0000 км и состоят в основном изо льда.' },
+    { id: 'uranus', name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 5, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
+      facts: [['Диаметр', '50 724 км'], ['От Солнца', '19,2 а. е.'], ['Год', '84 года'], ['Спутники', '29']],
+      note: 'Вращается лёжа на боку: ось наклонена на 98°.' },
+    { id: 'neptune', name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 5, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
+      facts: [['Диаметр', '49 244 км'], ['От Солнца', '30,1 а. е.'], ['Год', '165 лет'], ['Спутники', '16']],
+      note: 'Самые быстрые ветры в Солнечной системе, до 2 000 км/ч.' },
+  ];
+  const SUN = { id: 'sun', name: 'Солнце', r: 15,
+    facts: [['Диаметр', '1 392 700 км'], ['Масса', '99,86 % системы'], ['Поверхность', '≈ 5 500 °C'], ['Возраст', '4,6 млрд лет']],
+    note: 'Звезда — жёлтый карлик. В него поместилось бы около 1,3 миллиона Земель.' };
+  PLANETS.forEach(p => { p.d = dist(p.a); p.sx = p.sy = -999; p.sr = 0; });
+  SUN.sx = innerWidth / 2; SUN.sy = innerHeight / 2; SUN.sr = SUN.r;
+
+  // ---- time: days since J2000.0 ----
+  const J2000 = Date.UTC(2000, 0, 1, 12);
+  const nowDays = () => (Date.now() - J2000) / 86400000;
+  let days = nowDays(), speed = 10;
+  const fmt = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const dateEl = document.getElementById('date');
+
+  // ---- particles ----
+  const belt = [], kuiper = [], wind = [], stars = [];
+  for (let i = 0; i < (small ? 2200 : 3500); i++) {
+    const a = 2.1 + Math.pow(Math.random(), 0.9) * 1.2;
+    belt.push({ d: dist(a) + gauss() * 0.02, L: Math.random() * 360, n: 0.98561 / Math.pow(a, 1.5), y: gauss() * 0.04,
+      c: pick(['#b8a690', '#8f8272', '#d6c7b0', '#6f655a']), s: rnd(0.6, 1.4), o: rnd(0.2, 0.55) });
+  }
+  for (let i = 0; i < (small ? 2200 : 3500); i++) {
+    const a = 30 + Math.pow(Math.random(), 1.5) * 20;
+    kuiper.push({ d: dist(a) + gauss() * 0.05, L: Math.random() * 360, n: 0.98561 / Math.pow(a, 1.5), y: gauss() * 0.12,
+      c: pick(['#9fb2d8', '#7f8fb5', '#c8d4f0']), s: rnd(0.5, 1.2), o: rnd(0.2, 0.55) });
+  }
+  // Saturn's rings: particles in planet radii, with the real Cassini Division gap at ~1.95–2.03
+  const saturnRing = [];
+  for (let i = 0; i < (small ? 1800 : 2800); i++) {
+    let r = rnd(1.25, 2.3);
+    if (r > 1.95 && r < 2.03) continue;
+    saturnRing.push({ r, a: Math.random() * TAU, c: pick(['#fff3d6', '#e8d3a2', '#c9ad78', '#fff']), s: rnd(0.5, 1.3), o: r < 1.5 ? rnd(0.2, 0.45) : rnd(0.45, 0.9) });
+  }
+  const uranusRing = Array.from({ length: 500 }, () => ({ r: pick([1.6, 1.75, 1.9]) + gauss() * 0.01, a: Math.random() * TAU }));
+  function resetStars() {
+    stars.length = 0;
+    for (let i = 0; i < W * H / 1100; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.06 ? 1.4 : 0.7, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
+  }
+  resetStars();
+  addEventListener('resize', resetStars);
+
+  // ---- camera ----
+  let yaw = 0, tilt = 0.95, vYaw = 0;
+  let focus = null, fx = 0, fz = 0, fy = 0;      // world point at screen centre
+
+  function rot(x, y, z) {   // world -> camera (yaw about vertical, then tilt), no scale
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    return [x1, z1 * st - y * ct, z1 * ct + y * st];
+  }
+  function project(x, y, z) {
+    const [a, b, depth] = rot(x - fx, y - fy, z - fz);
+    const k = 22 / (22 - depth * 0.6);
+    return [W / 2 + a * zoom * k, H / 2 + b * zoom * k, depth, k];
+  }
+  const sizeK = () => Math.pow(zoom / zoom0, 0.7);
+
+  function planetPos(p) {
+    const L = (p.L0 + p.n * days) * DEG;
+    return [p.d * Math.cos(L), 0, -p.d * Math.sin(L)];
+  }
+
+  // ---- drawing ----
+  function sphere(x, y, r, col, lightX, lightY) {
+    const g = ctx.createRadialGradient(x + lightX * r * 0.5, y + lightY * r * 0.5, r * 0.08, x, y, r * 1.05);
+    g.addColorStop(0, col[0]); g.addColorStop(0.45, col[1]); g.addColorStop(1, col[2]);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+
+  function drawSun(t) {
+    const [x, y, , k] = project(0, 0, 0);
+    const r = SUN.r * sizeK() * k;
+    ctx.globalCompositeOperation = 'lighter';
+    const halo = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 6);
+    halo.addColorStop(0, 'rgba(255,190,90,0.45)');
+    halo.addColorStop(0.3, 'rgba(255,120,40,0.12)');
+    halo.addColorStop(1, 'rgba(255,100,30,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(x, y, r * 6, 0, TAU); ctx.fill();
+    // solar wind: sparks streaming out of the corona
+    if (wind.length < 260 && !reduce) for (let i = 0; i < 4; i++) wind.push({ a: Math.random() * TAU, d: 1, v: rnd(0.6, 1.6), life: 1 });
+    for (const w of wind) {
+      ctx.fillStyle = `rgba(255,${180 + w.life * 60 | 0},120,${w.life * 0.7})`;
+      const rr = r * w.d;
+      ctx.fillRect(x + Math.cos(w.a) * rr, y + Math.sin(w.a) * rr, 1.2, 1.2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    const g = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.1, x, y, r);
+    g.addColorStop(0, '#fffbe8'); g.addColorStop(0.5, '#ffd36b'); g.addColorStop(0.85, '#ff9a2e'); g.addColorStop(1, '#e0601a');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    SUN.sx = x; SUN.sy = y; SUN.sr = r;
+  }
+
+  function drawOrbits() {
+    ctx.lineWidth = 1;
+    for (const p of PLANETS) {
+      ctx.strokeStyle = p === focus ? 'rgba(255,205,130,0.45)' : 'rgba(150,175,255,0.13)';
+      ctx.beginPath();
+      for (let i = 0; i <= 120; i++) {
+        const L = (i / 120) * TAU;
+        const [x, y] = project(p.d * Math.cos(L), 0, -p.d * Math.sin(L));
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function drawDust(list, dt) {
+    for (const q of list) {
+      q.L += q.n * dt;
+      const L = q.L * DEG;
+      const [x, y] = project(q.d * Math.cos(L), q.y, -q.d * Math.sin(L));
+      ctx.globalAlpha = q.o;
+      ctx.fillStyle = q.c;
+      ctx.fillRect(x, y, q.s, q.s);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // local ring vector -> screen offset & depth, for a ring plane tilted by `inc` around the planet's local x axis
+  function ringPoint(r, a, inc) {
+    const u = Math.cos(a) * r, w = Math.sin(a) * r;
+    return rot(u, w * Math.sin(inc), w * Math.cos(inc));
+  }
+
+  function drawRing(p, x, y, pr, front) {
+    if (p.id === 'saturn') {
+      ctx.globalCompositeOperation = 'lighter';
+      for (const q of saturnRing) {
+        q.a += 0.0025 / Math.pow(q.r, 1.5);
+        const [dx, dy, dz] = ringPoint(q.r, q.a, 27 * DEG);
+        if ((dz >= 0) !== front) continue;
+        ctx.globalAlpha = q.o;
+        ctx.fillStyle = q.c;
+        ctx.fillRect(x + dx * pr, y + dy * pr, q.s, q.s);
+      }
+    } else if (p.id === 'uranus') {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = '#bfeff5';
+      for (const q of uranusRing) {
+        const [dx, dy, dz] = ringPoint(q.r, q.a, 98 * DEG);
+        if ((dz >= 0) !== front) continue;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(x + dx * pr, y + dy * pr, 0.8, 0.8);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawPlanet(p) {
+    const [x, y, depth, k] = p.screen;
+    const pr = p.r * sizeK() * k;
+    p.sx = x; p.sy = y; p.sr = pr;
+    // light comes from the Sun
+    let lx = SUN.sx - x, ly = SUN.sy - y; const ll = Math.hypot(lx, ly) || 1; lx /= ll; ly /= ll;
+    drawRing(p, x, y, pr, false);
+    const glow = ctx.createRadialGradient(x, y, pr * 0.8, x, y, pr * 2.2);
+    glow.addColorStop(0, p.col[1] + '55'); glow.addColorStop(1, p.col[1] + '00');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, pr * 2.2, 0, TAU); ctx.fill();
+    sphere(x, y, pr, p.col, lx, ly);
+    if ((p.id === 'jupiter' || p.id === 'saturn') && pr > 4) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(x, y, pr, 0, TAU); ctx.clip();
+      ctx.globalCompositeOperation = 'soft-light';
+      const bands = p.id === 'jupiter' ? 9 : 7;
+      for (let i = 0; i < bands; i++) {
+        ctx.fillStyle = i % 2 ? 'rgba(90,50,20,0.55)' : 'rgba(255,245,225,0.4)';
+        ctx.fillRect(x - pr, y - pr + (i / bands) * pr * 2, pr * 2, pr * 2 / bands * 0.7);
+      }
+      if (p.id === 'jupiter' && pr > 10) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(190,80,50,0.75)';
+        ctx.beginPath(); ctx.ellipse(x + pr * 0.3, y + pr * 0.28, pr * 0.2, pr * 0.11, 0, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+      // terminator shade over the banding
+      const sh = ctx.createLinearGradient(x + lx * pr, y + ly * pr, x - lx * pr, y - ly * pr);
+      sh.addColorStop(0.45, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,10,0.7)');
+      ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(x, y, pr, 0, TAU); ctx.fill();
+    }
+    if (p.id === 'earth') {
+      const L = (days / 27.32) * TAU;
+      const md = pr * 3.2;
+      const [dx, dy, dz] = rot(Math.cos(L), 0, -Math.sin(L));
+      const mx = x + dx * md, my = y + dy * md;
+      if (dz < 0) { /* behind: drawn before earth would be ideal; small enough to skip ordering */ }
+      sphere(mx, my, Math.max(1.1, pr * 0.27), ['#ffffff', '#b8b8b8', '#3a3a3a'], lx, ly);
+    }
+    drawRing(p, x, y, pr, true);
+  }
+
+  let showNames = true;
+  function drawNames() {
+    ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
+    ctx.textBaseline = 'middle';
+    const taken = [];   // skip a label that would overlap one already drawn (inner planets crowd together)
+    const order = focus ? [focus, ...PLANETS.filter(p => p !== focus)] : [...PLANETS].reverse();
+    for (const p of order) {
+      const w = ctx.measureText(p.name.toUpperCase()).width + 4, y = p.sy;
+      let x = p.sx + p.sr + 6;
+      if (x + w > W - 8) x = p.sx - p.sr - 6 - w;   // flip to the left near the screen edge
+      if (taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 11)) continue;
+      taken.push([x, y, w]);
+      ctx.fillStyle = p === focus ? 'rgba(255,215,150,0.95)' : 'rgba(205,215,245,0.7)';
+      ctx.fillText(p.name.toUpperCase(), x, y);
+    }
+  }
+
+  // ---- info card ----
+  const card = document.getElementById('card');
+  const cName = document.getElementById('c-name'), cFacts = document.getElementById('c-facts'), cNote = document.getElementById('c-note');
+  const hint = document.getElementById('hint');
+  function select(obj) {
+    focus = obj && obj !== SUN ? obj : null;
+    if (!obj) { card.hidden = true; zoomTarget = zoom0; hint.hidden = false; return; }
+    cName.textContent = obj.name;
+    cFacts.innerHTML = '';
+    for (const [k, v] of obj.facts) {
+      const wrap = document.createElement('div');
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v;
+      wrap.append(dt, dd); cFacts.append(wrap);
+    }
+    cNote.textContent = obj.note;
+    card.hidden = false; hint.hidden = true;
+    zoomTarget = obj === SUN ? zoom0 * 2.2 : zoom0 * (obj.a < 2 ? 7 : 3.2);
+  }
+  document.getElementById('c-close').addEventListener('click', () => select(null));
+
+  // ---- controls ----
+  const speedBtns = [...document.querySelectorAll('[data-speed]')];
+  speedBtns.forEach(b => b.addEventListener('click', () => {
+    speed = parseFloat(b.dataset.speed);
+    speedBtns.forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  }));
+  document.getElementById('s-now').addEventListener('click', () => { days = nowDays(); });
+  const namesBtn = document.getElementById('t-names');
+  namesBtn.addEventListener('click', () => { showNames = !showNames; namesBtn.setAttribute('aria-pressed', String(showNames)); });
+  if (reduce) { speed = 0; speedBtns.forEach(o => o.setAttribute('aria-pressed', String(o.dataset.speed === '0'))); }
+
+  const pts = new Map();
+  let pinch0 = null, tap = null;
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    tap = pts.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), moved: false } : null;
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom }; }
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 8) tap.moved = true;
+    if (pts.size === 1 && (!tap || tap.moved)) {
+      vYaw = dx * 0.006; yaw += vYaw;
+      tilt = clamp(tilt - dy * 0.006, 0.12, Math.PI / 2);
+    } else if (pts.size === 2 && pinch0) {
+      const [a, b] = [...pts.values()];
+      zoom = zoomTarget = clamp(pinch0.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d, zoom0 * 0.6, zoom0 * 14);
+    }
+  });
+  cv.addEventListener('pointerup', e => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch0 = null;
+    if (tap && !tap.moved && performance.now() - tap.t < 500) {
+      const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      let best = null, bd = Infinity;
+      for (const o of [SUN, ...PLANETS]) {
+        const d = Math.hypot(x - o.sx, y - o.sy) - o.sr;
+        if (d < 18 && d < bd) { bd = d; best = o; }
+      }
+      select(best);
+    }
+    tap = null;
+  });
+  cv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch0 = null; tap = null; });
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom = zoomTarget = clamp(zoom * Math.exp(-e.deltaY * 0.0015), zoom0 * 0.6, zoom0 * 14);
+  }, { passive: false });
+
+  // ---- frame loop ----
+  let last = performance.now(), t = 0, lastDateStr = '';
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    const dDays = speed * dt;
+    days += dDays;
+    if (!pts.size) { yaw += vYaw; vYaw *= 0.93; }
+
+    // follow the focused planet, or ease back to the Sun
+    const [tx, , tz] = focus ? planetPos(focus) : [0, 0, 0];
+    const ease = Math.min(1, dt * 4);
+    fx += (tx - fx) * ease; fz += (tz - fz) * ease;
+    zoom += (zoomTarget - zoom) * ease;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#020309';
+    ctx.fillRect(0, 0, W, H);
+    for (const s of stars) {
+      ctx.fillStyle = `rgba(215,225,255,${(0.3 + 0.5 * Math.abs(Math.sin(t * s.sp + s.tw))).toFixed(2)})`;
+      ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
+    }
+
+    drawOrbits();
+    ctx.globalCompositeOperation = 'lighter';
+    drawDust(kuiper, dDays);
+    drawDust(belt, dDays);
+    ctx.globalCompositeOperation = 'source-over';
+    for (const w of wind) { w.d += w.v * dt * 2; w.life -= dt * 0.5; }
+    for (let i = wind.length - 1; i >= 0; i--) if (wind[i].life <= 0) wind.splice(i, 1);
+
+    // painter's order by depth: things farther from the camera first
+    for (const p of PLANETS) { const [x, y, z] = planetPos(p); p.screen = project(x, y, z); }
+    const sunDepth = project(0, 0, 0)[2];
+    const order = [...PLANETS].sort((a, b) => a.screen[2] - b.screen[2]);
+    let sunDrawn = false;
+    for (const p of order) {
+      if (!sunDrawn && p.screen[2] > sunDepth) { drawSun(t); sunDrawn = true; }
+      drawPlanet(p);
+    }
+    if (!sunDrawn) drawSun(t);
+    if (showNames) drawNames();
+
+    const ds = fmt.format(new Date(J2000 + days * 86400000));
+    if (ds !== lastDateStr) { dateEl.textContent = ds; lastDateStr = ds; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
