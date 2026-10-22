@@ -1,38 +1,92 @@
 <title>Звёздное кольцо</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-  /* Layout: one full-bleed canvas, the planet tilted across the frame like in the reference */
+  /* Layout: full-bleed canvas with a planet system; a thin tool rail floats at the bottom */
   :root {
     --space: #02030a;
-    --hint: rgba(170, 200, 255, 0.45);
+    --hint: rgba(170, 200, 255, 0.5);
+    --chip: rgba(14, 22, 48, 0.72);
+    --chip-line: rgba(120, 160, 255, 0.22);
+    --chip-on: rgba(60, 120, 255, 0.35);
+    --chip-on-line: rgba(150, 200, 255, 0.85);
+    --ink: #dbe7ff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     color-scheme: dark;
   }
   html, body { height: 100%; }
   body {
     margin: 0;
     background: var(--space);
+    color: var(--ink);
     overflow: hidden;
     touch-action: none;
-    padding-left: max(0px, env(safe-area-inset-left, 0px));
-    padding-right: max(0px, env(safe-area-inset-right, 0px));
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  .hint {
+  .ui {
     position: fixed;
     left: 0; right: 0;
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    text-align: center;
-    font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
-    letter-spacing: 0.12em;
-    color: var(--hint);
-    pointer-events: none;
+    bottom: 0;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
   }
+  .hint {
+    font: 11px/1.4 var(--mono);
+    letter-spacing: 0.12em;
+    color: var(--hint);
+    text-align: center;
+    text-shadow: 0 0 6px var(--space), 0 0 12px var(--space);
+  }
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    pointer-events: auto;
+  }
+  .tools button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: 12px/1 var(--mono);
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    background: var(--chip);
+    border: 1px solid var(--chip-line);
+    border-radius: 999px;
+    padding: 9px 12px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .tools button[aria-pressed="true"] {
+    background: var(--chip-on);
+    border-color: var(--chip-on-line);
+  }
+  .tools button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
+  .tools .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .tools .clear { color: var(--hint); }
 </style>
 
 <canvas id="sky"></canvas>
-<div class="hint">ПРОВЕДИ ПАЛЬЦЕМ, ЧТОБЫ ПОВЕРНУТЬ</div>
+<div class="ui">
+  <div class="hint" id="hint">НАЖМИ — ДОБАВИТЬ · ПРОВЕДИ — ПОВЕРНУТЬ</div>
+  <div class="tools" role="toolbar" aria-label="Что добавлять">
+    <button id="t-planet" data-tool="planet" aria-pressed="true"><span class="dot" style="background:radial-gradient(circle at 35% 35%,#e9d6ff,#8f4dff 60%,#2a0a6b)"></span>Планета</button>
+    <button id="t-moon" data-tool="moon" aria-pressed="false"><span class="dot" style="background:radial-gradient(circle at 35% 35%,#d6ecff,#3d86ff 55%,#061447)"></span>Луна</button>
+    <button id="t-nova" data-tool="nova" aria-pressed="false"><span class="dot" style="background:radial-gradient(circle,#fff,#ffd36b 45%,rgba(255,160,60,0))"></span>Вспышка</button>
+    <button id="t-comet" data-tool="comet" aria-pressed="false"><span class="dot" style="background:linear-gradient(135deg,#fff,#9fd8ff 50%,rgba(60,120,255,0))"></span>Комета</button>
+    <button id="t-clear" class="clear" data-action="clear">Очистить</button>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -47,145 +101,313 @@
     cv.width = W * DPR; cv.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     cx = W * 0.5; cy = H * 0.5;
-    S = Math.min(W, H) * 0.5;          // base scale
+    S = Math.min(W, H) * 0.5;
   }
   addEventListener('resize', resize);
   resize();
 
   const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[(Math.random() * arr.length) | 0];
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-
-  // Ring bands: [inner, outer, density, palette]
-  const BLUE = ['#ffffff', '#cfe4ff', '#7fb6ff', '#3d7dff', '#1f4fd8', '#9fd8ff'];
-  const bands = [
-    [0.50, 0.56, 1.0, BLUE],
-    [0.58, 0.70, 1.6, BLUE],
-    [0.73, 0.76, 0.6, ['#ffffff', '#e6f0ff']],
-    [0.79, 0.98, 2.2, BLUE],
-    [1.01, 1.05, 0.5, ['#bcd6ff', '#ffffff']],
-    [1.08, 1.32, 1.6, BLUE],
-    [1.36, 1.75, 0.9, ['#5c8dff', '#9cc4ff', '#ffffff', '#2c5bd6']],
-  ];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const isMobile = Math.min(W, H) < 600;
-  const BASE = isMobile ? 7000 : 11000;
-  const ring = [];
-  for (const [r0, r1, d, pal] of bands) {
-    const n = Math.round(BASE * d * (r1 - r0) * 2.2);
-    for (let i = 0; i < n; i++) {
-      const r = rnd(r0, r1);
+  const TAU = Math.PI * 2;
+
+  // Colour worlds for planets: ring particles, body gradient, halo rgb, debris sparks
+  const PALETTES = {
+    blue:   { ring: ['#ffffff', '#cfe4ff', '#7fb6ff', '#3d7dff', '#1f4fd8', '#9fd8ff'],
+              body: ['#bfe6ff', '#3fa2ff', '#1546c9', '#030a3a'], halo: '60,130,255', rim: '120,200,255',
+              spark: ['#ffffff', '#ffe9a8', '#ffd36b', '#9fd8ff', '#7fb6ff', '#c9a8ff'] },
+    violet: { ring: ['#ffffff', '#f0d9ff', '#c79bff', '#9b5cff', '#ff8fd8', '#6a3dff'],
+              body: ['#f3e2ff', '#b06bff', '#5a1fc9', '#14053a'], halo: '150,80,255', rim: '220,170,255',
+              spark: ['#ffffff', '#ffc2ec', '#c79bff', '#8fb0ff'] },
+    gold:   { ring: ['#ffffff', '#fff1cc', '#ffd27a', '#ffae45', '#e07a2a', '#ffe9a8'],
+              body: ['#fff3d6', '#ffb347', '#c25a12', '#2e0f02'], halo: '255,150,60', rim: '255,210,140',
+              spark: ['#ffffff', '#ffe9a8', '#ffd36b', '#ff9a5c'] },
+    teal:   { ring: ['#ffffff', '#d4fff6', '#7af0dc', '#2fc9b8', '#1a8fa8', '#a8fff0'],
+              body: ['#e0fffa', '#3fe0c8', '#0f7f8f', '#02242e'], halo: '40,220,200', rim: '160,255,240',
+              spark: ['#ffffff', '#b8fff2', '#7fb6ff', '#ffe9a8'] },
+    rose:   { ring: ['#ffffff', '#ffe0e8', '#ff9fb8', '#ff5c8a', '#d6336c', '#ffc2d4'],
+              body: ['#ffe6ee', '#ff6f9a', '#a8184a', '#2e0414'], halo: '255,80,140', rim: '255,180,200',
+              spark: ['#ffffff', '#ffd6e2', '#ffd36b', '#c9a8ff'] },
+  };
+  const EXTRA_PALETTES = ['violet', 'gold', 'teal', 'rose', 'blue'];
+
+  // Ring bands as [inner, outer, density, use bright palette subset]
+  const BANDS = [
+    [0.50, 0.56, 1.0], [0.58, 0.70, 1.6], [0.73, 0.76, 0.6, true],
+    [0.79, 0.98, 2.2], [1.01, 1.05, 0.5, true], [1.08, 1.32, 1.6], [1.36, 1.75, 0.9],
+  ];
+  const R = 0.36; // planet body radius, in planet units
+
+  function makePlanet({ x, y, scale, palette, tiltOff = 0, rollOff = 0, density = 1, born = -10, rings = BANDS.length }) {
+    const pal = PALETTES[palette];
+    const base = (isMobile ? 7000 : 11000) * density;
+    const ring = [];
+    for (const [r0, r1, d, bright] of BANDS.slice(0, rings)) {
+      const n = Math.round(base * d * (r1 - r0) * 2.2);
+      const cols = bright ? pal.ring.slice(0, 2) : pal.ring;
+      for (let i = 0; i < n; i++) {
+        const r = rnd(r0, r1);
+        ring.push({
+          r, a: Math.random() * TAU, y: gauss() * 0.012 * (1 + r),
+          w: 0.25 / Math.pow(r, 1.5),
+          s: Math.random() < 0.06 ? rnd(1.4, 2.4) : rnd(0.5, 1.3),
+          c: pick(cols), o: rnd(0.35, 1),
+        });
+      }
+    }
+    const nDebris = Math.round((isMobile ? 1400 : 2400) * density);
+    for (let i = 0; i < nDebris; i++) {
+      const r = 1.75 + Math.pow(Math.random(), 1.8) * 1.6;
       ring.push({
-        r, a: Math.random() * Math.PI * 2,
-        y: gauss() * 0.012 * (1 + r),
-        w: 0.25 / Math.pow(r, 1.5),          // Keplerian-ish speed
-        s: Math.random() < 0.06 ? rnd(1.4, 2.4) : rnd(0.5, 1.3),
-        c: pal[(Math.random() * pal.length) | 0],
-        o: rnd(0.35, 1),
+        r, a: Math.random() * TAU, y: gauss() * 0.08 * r,
+        w: 0.25 / Math.pow(r, 1.5),
+        s: Math.random() < 0.1 ? rnd(1.6, 3) : rnd(0.6, 1.6),
+        c: pick(pal.spark), o: rnd(0.3, 1), tw: rnd(0, TAU),
       });
     }
+    return { x, y, scale, pal, tiltOff, rollOff, born, ring, moons: [], bandSeed: Math.random() * 10 };
   }
-  // Loose debris flung outward along the ring plane (the sparkly cloud in the video)
-  const debrisPal = ['#ffffff', '#ffe9a8', '#ffd36b', '#9fd8ff', '#7fb6ff', '#c9a8ff'];
-  for (let i = 0; i < (isMobile ? 1400 : 2400); i++) {
-    const r = 1.75 + Math.pow(Math.random(), 1.8) * 1.6;
-    ring.push({
-      r, a: Math.random() * Math.PI * 2,
-      y: gauss() * 0.08 * r,
-      w: 0.25 / Math.pow(r, 1.5),
-      s: Math.random() < 0.1 ? rnd(1.6, 3) : rnd(0.6, 1.6),
-      c: debrisPal[(Math.random() * debrisPal.length) | 0],
-      o: rnd(0.3, 1),
-      tw: rnd(0, 6.28),
-    });
+
+  // Base system: the big blue planet from the video plus two neighbours
+  let planets = [];
+  function seedSystem() {
+    const main = makePlanet({ x: 0, y: 0, scale: 1, palette: 'blue' });
+    main.moons.push({ r: 2.05, a: 0.9, w: 0.09, size: 0.045, pal: PALETTES.blue },
+                    { r: 2.6, a: 3.6, w: 0.06, size: 0.025, pal: PALETTES.blue });
+    const violet = makePlanet({ x: -0.62, y: -1.2, scale: 0.34, palette: 'violet', tiltOff: 0.25, rollOff: 0.35, density: 0.3 });
+    violet.moons.push({ r: 2.2, a: 2, w: 0.2, size: 0.07, pal: PALETTES.violet });
+    const gold = makePlanet({ x: 0.66, y: 1.22, scale: 0.4, palette: 'gold', tiltOff: -0.1, rollOff: -0.25, density: 0.35 });
+    planets = [main, violet, gold];
   }
-  // Distant background stars
-  const stars = Array.from({ length: isMobile ? 260 : 500 }, () => ({
+  seedSystem();
+  const BASE_COUNT = 3, MAX_ADDED = 8;
+
+  // Distant background stars (x, y in 0..1 of the screen)
+  let stars = Array.from({ length: isMobile ? 260 : 500 }, () => ({
     x: Math.random(), y: Math.random(),
     s: Math.random() < 0.08 ? rnd(1, 1.8) : rnd(0.3, 0.9),
-    tw: rnd(0, 6.28), sp: rnd(0.5, 2),
+    tw: rnd(0, TAU), sp: rnd(0.5, 2),
   }));
-  // Small moons
-  const moons = [
-    { r: 2.05, a: 0.9, w: 0.09, size: 0.045 },
-    { r: 2.6, a: 3.6, w: 0.06, size: 0.025 },
-  ];
+  const baseStarCount = stars.length;
+  let sparks = [];   // supernova particles, in px
+  let comets = [];
 
-  // View: tilt of the ring plane and its angle on screen
-  let tilt = 0.34, roll = -0.85;
-  let vTilt = 0, vRoll = 0, drag = null;
-  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
-  cv.addEventListener('pointermove', e => {
-    if (!drag) return;
-    vRoll = (e.clientX - drag.x) * 0.004;
-    vTilt = (e.clientY - drag.y) * 0.004;
-    roll += vRoll; tilt = Math.max(0.08, Math.min(1.4, tilt + vTilt));
-    drag = { x: e.clientX, y: e.clientY };
-  });
-  const end = () => { drag = null; };
-  cv.addEventListener('pointerup', end);
-  cv.addEventListener('pointercancel', end);
+  // Shared view, changed by dragging
+  let tilt = 0.34, roll = -0.85, vTilt = 0, vRoll = 0;
+  let t = 0;
 
-  const R = 0.36; // planet radius in units of S
-
-  function project(r, a, y) {
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const ct = Math.cos(tilt), st = Math.sin(tilt);
-    const y2 = y * ct + z * st;
-    const z2 = z * ct - y * st;            // depth (+ toward viewer)
-    const cr = Math.cos(roll), sr = Math.sin(roll);
-    return [cx + (x * cr - y2 * sr) * S, cy + (x * sr + y2 * cr) * S, z2];
+  const easeOut = x => 1 - Math.pow(1 - x, 3);
+  function view(p) {
+    const k = p.born < 0 ? 1 : easeOut(clamp((t - p.born) / 1.4, 0, 1));
+    return {
+      ox: cx + p.x * S, oy: cy + p.y * S, sc: S * p.scale * k,
+      tl: clamp(tilt + p.tiltOff, 0.08, 1.4), rl: roll + p.rollOff, k,
+    };
   }
 
-  function drawPlanet(t) {
-    const pr = R * S;
-    // halo
-    const halo = ctx.createRadialGradient(cx, cy, pr * 0.9, cx, cy, pr * 2.1);
-    halo.addColorStop(0, 'rgba(60,130,255,0.35)');
-    halo.addColorStop(1, 'rgba(20,40,120,0)');
+  function project(v, r, a, y) {
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const ct = Math.cos(v.tl), st = Math.sin(v.tl);
+    const y2 = y * ct + z * st;
+    const z2 = z * ct - y * st;
+    const cr = Math.cos(v.rl), sr = Math.sin(v.rl);
+    return [v.ox + (x * cr - y2 * sr) * v.sc, v.oy + (x * sr + y2 * cr) * v.sc, z2];
+  }
+
+  function drawBody(p, v) {
+    const pr = R * v.sc;
+    if (pr < 0.5) return;
+    const { ox, oy } = v, pal = p.pal;
+    const halo = ctx.createRadialGradient(ox, oy, pr * 0.9, ox, oy, pr * 2.1);
+    halo.addColorStop(0, `rgba(${pal.halo},0.35)`);
+    halo.addColorStop(1, `rgba(${pal.halo},0)`);
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(cx, cy, pr * 2.1, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox, oy, pr * 2.1, 0, TAU); ctx.fill();
 
     ctx.save();
-    ctx.beginPath(); ctx.arc(cx, cy, pr, 0, 6.283); ctx.clip();
-    const lx = cx - Math.cos(roll + 0.6) * pr * 0.45, ly = cy - Math.sin(roll + 0.6) * pr * 0.45;
-    const body = ctx.createRadialGradient(lx, ly, pr * 0.05, cx, cy, pr * 1.05);
-    body.addColorStop(0, '#bfe6ff');
-    body.addColorStop(0.25, '#3fa2ff');
-    body.addColorStop(0.6, '#1546c9');
-    body.addColorStop(1, '#030a3a');
+    ctx.beginPath(); ctx.arc(ox, oy, pr, 0, TAU); ctx.clip();
+    const lx = ox - Math.cos(v.rl + 0.6) * pr * 0.45, ly = oy - Math.sin(v.rl + 0.6) * pr * 0.45;
+    const body = ctx.createRadialGradient(lx, ly, pr * 0.05, ox, oy, pr * 1.05);
+    body.addColorStop(0, pal.body[0]);
+    body.addColorStop(0.25, pal.body[1]);
+    body.addColorStop(0.6, pal.body[2]);
+    body.addColorStop(1, pal.body[3]);
     ctx.fillStyle = body;
-    ctx.fillRect(cx - pr, cy - pr, pr * 2, pr * 2);
-    // atmospheric bands, parallel to the ring plane
-    ctx.translate(cx, cy); ctx.rotate(roll);
+    ctx.fillRect(ox - pr, oy - pr, pr * 2, pr * 2);
+    ctx.translate(ox, oy); ctx.rotate(v.rl);
     ctx.globalCompositeOperation = 'soft-light';
     for (let i = -7; i <= 7; i++) {
-      const yy = (i / 7) * pr * Math.cos(tilt) + Math.sin(t * 0.3 + i) * 1.5;
-      ctx.fillStyle = i % 2 ? 'rgba(10,30,120,0.35)' : 'rgba(170,225,255,0.25)';
-      ctx.fillRect(-pr, yy, pr * 2, pr * 0.07 * (1 + (i * 37 % 5) / 5));
+      const yy = (i / 7) * pr * Math.cos(v.tl) + Math.sin(t * 0.3 + i + p.bandSeed) * 1.5 * v.k;
+      ctx.fillStyle = i % 2 ? 'rgba(10,20,60,0.35)' : 'rgba(255,255,255,0.22)';
+      ctx.fillRect(-pr, yy, pr * 2, pr * 0.07 * (1 + (Math.abs(i * 37 + (p.bandSeed | 0)) % 5) / 5));
     }
     ctx.restore();
-    // rim light
     ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = 'rgba(120,200,255,0.5)';
+    ctx.strokeStyle = `rgba(${pal.rim},0.5)`;
     ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx, cy, pr - 0.75, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ox, oy, Math.max(0.1, pr - 0.75), 0, TAU); ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  function drawMoon(m) {
-    const [x, y] = project(m.r, m.a, 0);
-    const mr = m.size * S;
+  function drawMoon(m, v) {
+    const [x, y] = project(v, m.r, m.a, 0);
+    const mr = Math.max(1.2, m.size * v.sc);
     const g = ctx.createRadialGradient(x - mr * 0.4, y - mr * 0.4, mr * 0.1, x, y, mr);
-    g.addColorStop(0, '#d6ecff'); g.addColorStop(0.4, '#3d86ff'); g.addColorStop(1, '#061447');
+    g.addColorStop(0, m.pal.body[0]); g.addColorStop(0.4, m.pal.body[1]); g.addColorStop(1, m.pal.body[3]);
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, mr, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, mr, 0, TAU); ctx.fill();
   }
 
   const back = [], front = [];
-  let last = performance.now(), t = 0;
+  function drawRing(list, sizeK) {
+    for (let i = 0; i < list.length; i += 2) {
+      const p = list[i], q = list[i + 1];
+      let o = p.o;
+      if (p.tw !== undefined) o *= 0.5 + 0.5 * Math.sin(t * 2 + p.tw);
+      ctx.globalAlpha = o;
+      ctx.fillStyle = p.c;
+      const s = p.s * sizeK;
+      ctx.fillRect(q[0], q[1], s, s);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPlanet(p, spin) {
+    const v = view(p);
+    const sizeK = 0.55 + 0.45 * Math.min(1, p.scale);
+    back.length = 0; front.length = 0;
+    for (const q of p.ring) {
+      q.a += q.w * spin;
+      const pr = project(v, q.r, q.a, q.y);
+      (pr[2] < 0 ? back : front).push(q, pr);
+    }
+    for (const m of p.moons) { m.a += m.w * spin; if (project(v, m.r, m.a, 0)[2] < 0) drawMoon(m, v); }
+    ctx.globalCompositeOperation = 'lighter';
+    drawRing(back, sizeK);
+    ctx.globalCompositeOperation = 'source-over';
+    drawBody(p, v);
+    ctx.globalCompositeOperation = 'lighter';
+    drawRing(front, sizeK);
+    ctx.globalCompositeOperation = 'source-over';
+    for (const m of p.moons) if (project(v, m.r, m.a, 0)[2] >= 0) drawMoon(m, v);
+  }
+
+  // ---- Adding objects by tap ----
+  let tool = 'planet';
+  const hint = document.getElementById('hint');
+  document.querySelectorAll('.tools button').forEach(b => {
+    b.addEventListener('click', () => {
+      if (b.dataset.action === 'clear') { clearAdded(); return; }
+      tool = b.dataset.tool;
+      document.querySelectorAll('.tools button[data-tool]').forEach(o =>
+        o.setAttribute('aria-pressed', String(o === b)));
+    });
+  });
+
+  function clearAdded() {
+    planets = planets.slice(0, BASE_COUNT);
+    planets.forEach(p => { p.moons = p.moons.filter(m => !m.added); });
+    stars = stars.slice(0, baseStarCount);
+    sparks = []; comets = [];
+  }
+
+  function nearestPlanet(px, py) {
+    let best = null, bd = Infinity;
+    for (const p of planets) {
+      const d = Math.hypot(px - (cx + p.x * S), py - (cy + p.y * S)) / p.scale;
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
+  function addPlanet(px, py) {
+    if (planets.length - BASE_COUNT >= MAX_ADDED) planets.splice(BASE_COUNT, 1);
+    const scale = rnd(0.18, 0.34);
+    planets.push(makePlanet({
+      x: (px - cx) / S, y: (py - cy) / S, scale,
+      palette: pick(EXTRA_PALETTES),
+      tiltOff: rnd(-0.2, 0.4), rollOff: rnd(-0.5, 0.5),
+      density: scale * 0.8, rings: Math.random() < 0.5 ? BANDS.length : 4, born: t,
+    }));
+    burst(px, py, 60, ['#ffffff', '#cfe4ff'], 90);
+  }
+
+  function addMoon(px, py) {
+    const p = nearestPlanet(px, py), v = view(p);
+    const dx = (px - v.ox) / v.sc, dy = (py - v.oy) / v.sc;
+    const cr = Math.cos(v.rl), sr = Math.sin(v.rl);
+    const u = dx * cr + dy * sr, w = -dx * sr + dy * cr;
+    const st = Math.max(0.12, Math.sin(v.tl));
+    const r = clamp(Math.hypot(u, w / st), R * 1.4, 4);
+    const pal = PALETTES[pick(EXTRA_PALETTES)];
+    p.moons.push({ r, a: Math.atan2(w / st, u), w: 0.35 / Math.pow(r, 1.5), size: rnd(0.03, 0.07), pal, added: true });
+    burst(px, py, 30, pal.ring.slice(0, 3), 60);
+  }
+
+  function burst(px, py, n, cols, speed) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, sp = speed * Math.pow(Math.random(), 0.6);
+      sparks.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+        life: 1, decay: rnd(0.4, 0.9), c: pick(cols), s: rnd(0.8, 2.2) });
+    }
+  }
+
+  function addNova(px, py) {
+    burst(px, py, 320, ['#ffffff', '#fff1cc', '#ffd36b', '#ff9a5c', '#9fd8ff', '#c9a8ff'], 260);
+    sparks.push({ flash: true, x: px, y: py, life: 1, decay: 1.6 });
+    for (let i = 0; i < 14; i++) {
+      stars.push({ x: (px + gauss() * 60) / W, y: (py + gauss() * 60) / H,
+        s: rnd(0.6, 1.8), tw: rnd(0, TAU), sp: rnd(0.5, 2) });
+    }
+  }
+
+  function addComet(px, py) {
+    const a = Math.atan2(cy - py, cx - px) + rnd(-0.9, 0.9);
+    const sp = rnd(160, 260);
+    comets.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, tail: [], age: 0,
+      col: pick(['159,216,255', '200,170,255', '255,233,168']) });
+    if (comets.length > 6) comets.shift();
+  }
+
+  const ADD = { planet: addPlanet, moon: addMoon, nova: addNova, comet: addComet };
+
+  // Pointer: a short tap adds the selected object, a drag rotates the system
+  let drag = null;
+  cv.addEventListener('pointerdown', e => {
+    drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now(), moved: false };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) drag.moved = true;
+    if (!drag.moved) return;
+    vRoll = (e.clientX - drag.x) * 0.004;
+    vTilt = (e.clientY - drag.y) * 0.004;
+    roll += vRoll; tilt = clamp(tilt + vTilt, 0.08, 1.4);
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  cv.addEventListener('pointerup', e => {
+    if (drag && !drag.moved && performance.now() - drag.t0 < 500) {
+      const r = cv.getBoundingClientRect();
+      ADD[tool](e.clientX - r.left, e.clientY - r.top);
+      hint.textContent = 'ВЫБЕРИ ОБЪЕКТ ВНИЗУ И НАЖМИ НА НЕБО';
+    }
+    drag = null;
+  });
+  cv.addEventListener('pointercancel', () => { drag = null; });
+
+  // ---- Frame loop ----
+  let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (!reduce) t += dt;
-    if (!drag) { vRoll *= 0.94; vTilt *= 0.94; roll += vRoll; tilt = Math.max(0.08, Math.min(1.4, tilt + vTilt)); }
+    t += dt;
+    const spin = reduce ? 0 : dt;
+    if (!drag || !drag.moved) {
+      vRoll *= 0.94; vTilt *= 0.94;
+      roll += vRoll; tilt = clamp(tilt + vTilt, 0.08, 1.4);
+    }
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#02030a';
@@ -193,38 +415,58 @@
 
     ctx.globalCompositeOperation = 'lighter';
     for (const s of stars) {
-      const a = 0.35 + 0.65 * Math.abs(Math.sin(t * s.sp + s.tw));
+      const a = 0.35 + 0.65 * Math.abs(Math.sin((reduce ? 0 : t) * s.sp + s.tw));
       ctx.fillStyle = `rgba(210,225,255,${a * 0.8})`;
       ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
     }
 
-    back.length = 0; front.length = 0;
-    const spin = reduce ? 0 : dt;
-    for (const p of ring) {
-      p.a += p.w * spin;
-      const q = project(p.r, p.a, p.y);
-      (q[2] < 0 ? back : front).push(p, q);
-    }
-    const draw = list => {
-      for (let i = 0; i < list.length; i += 2) {
-        const p = list[i], q = list[i + 1];
-        let o = p.o;
-        if (p.tw !== undefined) o *= 0.5 + 0.5 * Math.sin(t * 2 + p.tw);
-        ctx.globalAlpha = o;
-        ctx.fillStyle = p.c;
-        ctx.fillRect(q[0], q[1], p.s, p.s);
-      }
-      ctx.globalAlpha = 1;
-    };
+    // smaller planets are farther away, so they are drawn first
+    const order = planets.slice().sort((a, b) => a.scale - b.scale);
+    for (const p of order) drawPlanet(p, spin);
 
-    for (const m of moons) { m.a += m.w * spin; if (project(m.r, m.a, 0)[2] < 0) drawMoon(m); }
-    draw(back);
-    ctx.globalCompositeOperation = 'source-over';
-    drawPlanet(t);
     ctx.globalCompositeOperation = 'lighter';
-    draw(front);
+    for (const c of comets) {
+      c.age += dt;
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      c.tail.push({ x: c.x + gauss() * 2, y: c.y + gauss() * 2, life: 1 });
+      for (const q of c.tail) q.life -= dt * 0.9;
+      while (c.tail.length && c.tail[0].life <= 0) c.tail.shift();
+      for (const q of c.tail) {
+        ctx.fillStyle = `rgba(${c.col},${q.life * 0.7})`;
+        const s = 0.6 + q.life * 2;
+        ctx.fillRect(q.x, q.y, s, s);
+      }
+      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 10);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(0.3, `rgba(${c.col},0.6)`);
+      g.addColorStop(1, `rgba(${c.col},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(c.x, c.y, 10, 0, TAU); ctx.fill();
+    }
+    comets = comets.filter(c => c.x > -300 && c.x < W + 300 && c.y > -300 && c.y < H + 300);
+
+    for (const s of sparks) {
+      s.life -= s.decay * dt;
+      if (s.life <= 0) continue;
+      if (s.flash) {
+        const r = 30 + (1 - s.life) * 120;
+        const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r);
+        g.addColorStop(0, `rgba(255,255,255,${s.life})`);
+        g.addColorStop(0.25, `rgba(255,210,120,${s.life * 0.6})`);
+        g.addColorStop(1, 'rgba(255,120,60,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, TAU); ctx.fill();
+        continue;
+      }
+      s.vx *= 0.985; s.vy *= 0.985;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      ctx.globalAlpha = Math.min(1, s.life * 1.4);
+      ctx.fillStyle = s.c;
+      ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    ctx.globalAlpha = 1;
+    sparks = sparks.filter(s => s.life > 0);
     ctx.globalCompositeOperation = 'source-over';
-    for (const m of moons) if (project(m.r, m.a, 0)[2] >= 0) drawMoon(m);
 
     requestAnimationFrame(frame);
   }
