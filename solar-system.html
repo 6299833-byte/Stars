@@ -187,6 +187,8 @@
   };
   const rotY = a => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
   const rotX = a => { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+  // body frame -> world: tilt the axis, then turn it to its real ecliptic longitude (rotX alone points it at 270°)
+  const tiltM = b => mul(rotY(((b.pole ?? 270) + 90) * DEG), rotX(b.tiltAx * DEG));
   // camera: yaw about the vertical, then elevation `tilt` (π/2 = looking straight down). Output: screen x, screen y (down), depth (+ toward viewer)
   const camM = (yaw, tilt) => {
     const cy = Math.cos(yaw), sy = Math.sin(yaw), ct = Math.cos(tilt), st = Math.sin(tilt);
@@ -216,13 +218,33 @@
   photos.nebula.src = 'img/rubin-trifid-lagoon.jpg';
   for (const k in photos) photos[k].onload = () => resetStars();
   const ready = im => im.complete && im.naturalWidth > 0;
+  const clean = new Map();   // satellite trails are pure R/G/B streaks: clamp them to the sky's own grey
+  function untrail(im) {
+    if (clean.has(im)) return clean.get(im);
+    let out = im;
+    try {
+      const c = document.createElement('canvas'), w = c.width = im.naturalWidth, h = c.height = im.naturalHeight, g = c.getContext('2d');
+      g.drawImage(im, 0, 0);
+      const d = g.getImageData(0, 0, w, h), p = d.data, n = w * h, m = new Uint8Array(n);
+      for (let i = 0; i < n; i++) {
+        const r = p[i * 4], gg = p[i * 4 + 1], b = p[i * 4 + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), md = r + gg + b - mx - mn;
+        m[i] = mx - md > 45 && mx > 2 * md && md < 1.5 * mn + 14;
+      }
+      for (let i = w + 1; i < n - w - 1; i++) if (m[i] | m[i - 1] | m[i + 1] | m[i - w] | m[i + w] | m[i - w - 1] | m[i - w + 1] | m[i + w - 1] | m[i + w + 1]) {
+        const r = p[i * 4], gg = p[i * 4 + 1], b = p[i * 4 + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), v = Math.min(r + gg + b - mx - mn, mn + 6);
+        for (let k = 0; k < 3; k++) p[i * 4 + k] = Math.min(p[i * 4 + k], v);
+      }
+      g.putImageData(d, 0, 0); out = c;
+    } catch (e) { /* tainted canvas (file://): keep the photo as is */ }
+    clean.set(im, out); return out;
+  }
   // draws a photo to cover the screen around a focus point, darkened most where the planets sit
   function photoSky(c, im, fxp, fyp, dim) {
     c.width = W * DPR; c.height = H * DPR;
     const g = c.getContext('2d');
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
-    g.drawImage(im, clamp(W / 2 - fxp * w, W - w, 0), clamp(H / 2 - fyp * h, H - h, 0), w, h);
+    g.drawImage(im === photos.spiral ? untrail(im) : im, clamp(W / 2 - fxp * w, W - w, 0), clamp(H / 2 - fyp * h, H - h, 0), w, h);
     const v = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, Math.max(W, H) * 0.75);
     v.addColorStop(0, `rgba(2,3,9,${dim})`); v.addColorStop(1, `rgba(2,3,9,${dim * 0.45})`);
     g.fillStyle = v; g.fillRect(0, 0, W, H);
@@ -315,7 +337,7 @@
     else if (skyMode === 'field' && ready(photos.field)) photoSky(bgCanvas, photos.field, 0.5, 0.5, 0.35);
     else if (ready(photos.cluster)) photoSky(bgCanvas, photos.cluster, 0.3, 0.45, 0.6);
     // the Sun's close-up sits in front of the Lagoon and Trifid nebulae
-    if (ready(photos.nebula)) photoSky(bgSun, photos.nebula, 0.62, 0.55, 0.62);
+    if (ready(photos.nebula)) photoSky(bgSun, photos.nebula, 0.62, 0.55, 0.74);
     else { bgSun.width = bgCanvas.width; bgSun.height = bgCanvas.height; bgSun.getContext('2d').drawImage(bgCanvas, 0, 0); }
     if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72);
     else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
@@ -328,29 +350,30 @@
   const dist = a => 0.95 + 1.3 * Math.log(1 + a * 1.2);
 
   // L0/n: mean longitude at J2000 and its daily rate (circular-orbit approximation of the real positions).
-  // rot: sidereal day in Earth days; tiltAx: axial tilt in degrees (over 90° means retrograde spin).
+  // rot: sidereal day in Earth days; tiltAx: axial tilt in degrees (over 90° means retrograde spin);
+  // pole: ecliptic longitude the north pole leans toward (IAU 2015); e, peri: eccentricity and longitude of perihelion (JPL, J2000).
   // p1: orbital period at 1 planet radius in days, for Keplerian ring speeds.
   const PLANETS = [
-    { id: 'mercury', name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.8, col: ['#e6dfd6', '#a79d93', '#4a4440'],
+    { id: 'mercury', e: 0.2056, peri: 77.46, pole: 318, name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.8, col: ['#e6dfd6', '#a79d93', '#4a4440'],
       rot: 58.646, tiltAx: 0.03, p1: 0.0705, halo: '190,180,170',
       facts: 'Диаметр 4 879 км · 0,39 а. е. · год 88 дней · сутки 58,6 земных · спутников нет',
       note: 'Самая маленькая планета. Солнечные сутки на ней длятся 176 земных дней, дольше её года.' },
-    { id: 'venus', name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 4.2, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
+    { id: 'venus', e: 0.0068, peri: 131.53, pole: 210, name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 4.2, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
       rot: 243.02, tiltAx: 177.4, p1: 0.0602, halo: '255,220,150',
       facts: 'Диаметр 12 104 км · 0,72 а. е. · год 225 дней · сутки 243 земных, вращение обратное · спутников нет',
       note: 'Самая горячая планета: под плотными облаками около 465 °C.' },
-    { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 4.4, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
+    { id: 'earth', e: 0.0167, peri: 102.95, pole: 90, name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 4.4, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
       rot: 0.99727, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
       facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
       note: 'Единственная известная планета с жизнью. Вокруг летают станции МКС и Тяньгун, телескопы Хаббл и Чандра, метеоспутники и тысячи спутников связи и навигации; на ночной стороне горят города.',
-      moons: [{ name: 'Луна', a: 60.3, P: 27.32, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
-    { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 3.4, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
+      moons: [{ name: 'Луна', a: 60.3, P: 27.32, L0: 218.316, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
+    { id: 'mars', e: 0.0934, peri: 336.04, pole: 353, name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 3.4, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
       rot: 1.02596, tiltAx: 25.19, p1: 0.0694, halo: '255,150,110',
       facts: 'Диаметр 6 779 км · 1,52 а. е. · год 687 дней · сутки 24 ч 37 мин · наклон оси 25,2° · 2 спутника',
       note: 'Здесь гора Олимп, высочайший вулкан Солнечной системы, около 22 км. Вокруг работают орбитальные аппараты Земли: MRO, MAVEN, Mars Express, TGO, Тяньвэнь-1 и Аль-Амаль.',
       moons: [{ name: 'Фобос', a: 2.76, P: 0.319, size: 0.05, col: ['#d8c8b8', '#8a7868', '#2a2018'] },
               { name: 'Деймос', a: 6.92, P: 1.263, size: 0.04, col: ['#e0d0c0', '#9a8878', '#2a2018'] }] },
-    { id: 'jupiter', name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 10, col: ['#fff0dc', '#d9b38c', '#5e4026'],
+    { id: 'jupiter', e: 0.0484, peri: 14.73, pole: 248, name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 10, col: ['#fff0dc', '#d9b38c', '#5e4026'],
       rot: 0.41354, tiltAx: 3.13, p1: 0.1235, halo: '255,210,160',
       rings: [[1.72, 1.81, 0.12, ['#8a6a50', '#a88a6a']], [1.4, 1.71, 0.05, ['#6a5040']]],
       facts: 'Диаметр 139 820 км · 5,2 а. е. · год 11,9 лет · сутки 9 ч 56 мин · 95 спутников',
@@ -359,7 +382,7 @@
               { name: 'Европа', a: 9.4, P: 3.551, size: 0.055, col: ['#ffffff', '#d9cbb0', '#4a4030'] },
               { name: 'Ганимед', a: 15.0, P: 7.155, size: 0.09, col: ['#e8e0d4', '#a89c8c', '#302820'] },
               { name: 'Каллисто', a: 26.3, P: 16.69, size: 0.085, col: ['#cfc4b8', '#7d6e60', '#241c16'] }] },
-    { id: 'saturn', name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 8.5, col: ['#fff6dc', '#e3c98f', '#6a5326'],
+    { id: 'saturn', e: 0.0539, peri: 92.6, pole: 79.5, name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 8.5, col: ['#fff6dc', '#e3c98f', '#6a5326'],
       rot: 0.44401, tiltAx: 26.73, p1: 0.1747, halo: '255,225,160',
       // D, C, B, Cassini Division, A, F rings, in planet radii
       rings: [[1.11, 1.24, 0.08, ['#7a6a55']], [1.24, 1.53, 0.35, ['#9c8a6c', '#b8a582', '#8a7a62']],
@@ -373,11 +396,11 @@
               { name: 'Диона', a: 6.26, P: 2.737, size: 0.05, col: ['#ffffff', '#cfcfcf', '#3c3c3c'] },
               { name: 'Рея', a: 8.74, P: 4.518, size: 0.06, col: ['#ffffff', '#c8c4c0', '#3a3836'] },
               { name: 'Титан', a: 20.3, P: 15.945, size: 0.1, col: ['#ffe0a0', '#e0a64a', '#5a3a10'] }] },
-    { id: 'uranus', name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 6.2, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
+    { id: 'uranus', e: 0.0473, peri: 170.95, pole: 77.6, name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 6.2, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
       rot: 0.71833, tiltAx: 97.77, p1: 0.1235, halo: '160,240,245',
-      rings: [[1.64, 1.645, 0.05, ['#8aa0a8']], [1.66, 1.665, 0.05, ['#8aa0a8']], [1.675, 1.68, 0.05, ['#8aa0a8']],
-              [1.75, 1.755, 0.06, ['#9ab0b8']], [1.77, 1.775, 0.06, ['#9ab0b8']], [1.79, 1.795, 0.06, ['#9ab0b8']],
-              [1.84, 1.845, 0.06, ['#a0b8c0']], [1.87, 1.875, 0.06, ['#a0b8c0']], [1.94, 1.96, 0.2, ['#d0e4ea', '#ffffff']]],
+      rings: [[1.635, 1.639, 0.05, ['#8aa0a8']], [1.650, 1.654, 0.05, ['#8aa0a8']], [1.664, 1.668, 0.05, ['#8aa0a8']],
+              [1.747, 1.753, 0.06, ['#9ab0b8']], [1.783, 1.789, 0.06, ['#9ab0b8']], [1.844, 1.848, 0.05, ['#a0b8c0']],
+              [1.861, 1.865, 0.06, ['#a0b8c0']], [1.887, 1.893, 0.07, ['#a0b8c0']], [1.997, 2.004, 0.25, ['#d0e4ea', '#ffffff']]],
       facts: 'Диаметр 50 724 км · 19,2 а. е. · год 84 года · сутки 17 ч 14 мин · наклон оси 97,8° · 29 спутников',
       note: 'Вращается лёжа на боку, поэтому кольца и спутники ходят почти вертикально.',
       moons: [{ name: 'Миранда', a: 5.08, P: 1.413, size: 0.04, col: ['#ffffff', '#c0c0c0', '#404040'] },
@@ -385,7 +408,7 @@
               { name: 'Умбриэль', a: 10.4, P: 4.144, size: 0.06, col: ['#d0d0d0', '#808080', '#282828'] },
               { name: 'Титания', a: 17.1, P: 8.706, size: 0.075, col: ['#ffffff', '#c4bcb4', '#3a3632'] },
               { name: 'Оберон', a: 22.8, P: 13.46, size: 0.075, col: ['#f0e8e0', '#a8a098', '#2e2a26'] }] },
-    { id: 'neptune', name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 6.2, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
+    { id: 'neptune', e: 0.0086, peri: 44.96, pole: 319, name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 6.2, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
       rot: 0.67125, tiltAx: 28.32, p1: 0.1084, halo: '110,150,255',
       rings: [[2.15, 2.16, 0.05, ['#7080a0']], [2.53, 2.545, 0.08, ['#8090b0', '#a0b0d0']]],
       facts: 'Диаметр 49 244 км · 30,1 а. е. · год 165 лет · сутки 16 ч 6 мин · наклон оси 28,3° · 16 спутников',
@@ -393,8 +416,8 @@
       moons: [{ name: 'Протей', a: 4.75, P: 1.122, size: 0.04, col: ['#d0d0d0', '#808080', '#282828'] },
               { name: 'Тритон', a: 14.3, P: -5.877, size: 0.1, col: ['#ffffff', '#d8c8c0', '#403430'], inc: 23 }] },
   ];
-  const SUN = { id: 'sun', name: 'Солнце', r: 17, rot: 25.38, tiltAx: 7.25, isSun: true,
-    facts: 'Диаметр 1 392 700 км · 99,86 % массы системы · поверхность ≈ 5 500 °C · экватор оборачивается за 25,4 суток',
+  const SUN = { id: 'sun', name: 'Солнце', r: 17, rot: 24.47, tiltAx: 7.25, pole: 346, isSun: true,
+    facts: 'Диаметр 1 392 700 км · 99,86 % массы системы · поверхность ≈ 5 500 °C · экватор оборачивается за 24,5 суток, полюса — около 34',
     note: 'Звезда — жёлтый карлик возрастом 4,6 млрд лет. В него поместилось бы около 1,3 миллиона Земель.' };
   PLANETS.forEach(p => { p.d = dist(p.a); p.sx = p.sy = -999; p.sr = 0; });
   SUN.sx = innerWidth / 2; SUN.sy = innerHeight / 2; SUN.sr = SUN.r;
@@ -435,9 +458,15 @@
   function planetPos(p) {
     if (p.isSun) return [0, 0, 0];
     if (p.kind) return p.wpos || [0, 0, 0];
-    const L = (p.L0 + p.n * days) * DEG;
-    return [p.d * Math.cos(L), 0, -p.d * Math.sin(L)];
+    const L = (p.L0 + p.n * days) * DEG, M = L - p.peri * DEG;
+    // equation of centre: true longitude from the mean one, then the orbit radius there
+    return orbitAt(p, L + 2 * p.e * Math.sin(M) + 1.25 * p.e * p.e * Math.sin(2 * M));
   }
+  function orbitAt(p, th) {
+    const r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(th - p.peri * DEG)), d = dist(r);
+    return [d * Math.cos(th), 0, -d * Math.sin(th)];
+  }
+  const trueLon = p => { const L = (p.L0 + p.n * days) * DEG, M = L - p.peri * DEG; return L + 2 * p.e * Math.sin(M) + 1.25 * p.e * p.e * Math.sin(2 * M); };
 
   function sphere(x, y, r, col, lx, ly) {
     const g = ctx.createRadialGradient(x + lx * r * 0.5, y + ly * r * 0.5, r * 0.08, x, y, r * 1.05);
@@ -471,8 +500,7 @@
       ctx.strokeStyle = p === focus ? 'rgba(255,205,130,0.45)' : 'rgba(150,175,255,0.13)';
       ctx.beginPath();
       for (let i = 0; i <= 120; i++) {
-        const L = (i / 120) * TAU;
-        const [x, y] = project(p.d * Math.cos(L), 0, -p.d * Math.sin(L));
+        const [x, y] = project(...orbitAt(p, (i / 120) * TAU));
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
       ctx.stroke();
@@ -543,10 +571,10 @@
     ctx.lineCap = 'round';
     const N = 140;
     for (const p of PLANETS) {
-      const c = hexRgb(p.col[1]), Lp = (p.L0 + p.n * days) * DEG;
-      let prev = project(p.d * Math.cos(Lp), 0, -p.d * Math.sin(Lp));
+      const c = hexRgb(p.col[1]), Lp = trueLon(p);
+      let prev = project(...orbitAt(p, Lp));
       for (let i = 1; i <= N; i++) {
-        const L = Lp - i / N * TAU, cur = project(p.d * Math.cos(L), 0, -p.d * Math.sin(L));
+        const L = Lp - i / N * TAU, cur = project(...orbitAt(p, L));
         const k = Math.exp(-(i / N * TAU) / 1.1);
         const a = (p === focus ? 0.14 : 0.06) + 0.34 * k;
         ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
@@ -562,11 +590,11 @@
     const push = (a, L0, y, nDeg, size, br, tw, c) => data.push(dist(a) + gauss() * 0.012, L0, y, nDeg * DEG, size, br, tw, 0, c[0] / 255, c[1] / 255, c[2] / 255);
     const AST = [[190, 170, 140], [150, 135, 115], [220, 200, 160], [125, 112, 100]], ICE = [[160, 180, 225], [130, 150, 195], [205, 218, 248]];
     const gaps = [2.502, 2.825, 2.958, 3.279];
-    for (let i = 0; i < 9000 * k; i++) {
+    for (let i = 0; i < 13000 * k; i++) {
       let a;
       do a = 2.06 + Math.pow(Math.random(), 0.9) * 1.25; while (gaps.some(g => Math.abs(a - g) < 0.018) && Math.random() < 0.9);
       const spark = Math.random() < 0.03;
-      push(a, rnd(0, TAU), gauss() * 0.035, 0.98561 / Math.pow(a, 1.5), spark ? rnd(1.3, 2) : rnd(0.5, 1.1), spark ? 0.6 : rnd(0.09, 0.26), spark ? rnd(0, TAU) : -1, spark ? [255, 232, 190] : pick(AST));
+      push(a, rnd(0, TAU), gauss() * 0.035, 0.98561 / Math.pow(a, 1.5), spark ? rnd(1.3, 2) : rnd(0.5, 1.1), spark ? 0.8 : rnd(0.14, 0.36), spark ? rnd(0, TAU) : -1, spark ? [255, 232, 190] : pick(AST));
     }
     const jup = PLANETS.find(o => o.id === 'jupiter');
     for (let i = 0; i < 1200 * k; i++) {
@@ -685,12 +713,12 @@
       }
       case 'mercury': {
         let c = mix([105, 100, 96], [205, 198, 190], n);
-        if (fbm(x * 7, y * 7, z * 7, 2) > 0.68) c = mix(c, [70, 66, 62], 0.6);
+        c = mix(c, [70, 66, 62], 0.6 * smooth(clamp((fbm(x * 7, y * 7, z * 7, 2) - 0.62) / 0.1, 0, 1)));
         return c;
       }
       case 'venus': {
         const b2 = Math.sin(lat * 6 + fbm(x * 2.5, y * 2.5 + 3, z * 2.5) * 5);
-        return mix(mix([205, 165, 105], [245, 225, 180], n), [250, 238, 205], (b2 + 1) * 0.25);
+        return mix(mix([205, 165, 105], [245, 225, 180], n), [250, 238, 205], (b2 + 1) * 0.05);
       }
       case 'earth': {
         if (alat > (68 + (n - 0.5) * 30) * DEG) return [235, 242, 248];
@@ -703,7 +731,7 @@
       case 'mars': {
         if (alat > 76 * DEG) return [240, 236, 230];
         let c = mix([165, 70, 35], [220, 135, 85], n);
-        if (fbm(x * 2.2 + 7, y * 2.2, z * 2.2, 4) > 0.58) c = mix(c, [100, 50, 32], 0.6);
+        c = mix(c, [100, 50, 32], 0.6 * smooth(clamp((fbm(x * 2.2 + 7, y * 2.2, z * 2.2, 4) - 0.52) / 0.1, 0, 1)));
         return c;
       }
       case 'jupiter': {
@@ -717,7 +745,14 @@
       }
       case 'saturn': {
         const b2 = Math.sin(lat * 18 + fbm(x * 2, y * 6, z * 2) * 0.8);
-        return mix(mix([190, 160, 105], [245, 228, 180], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.25);
+        let c = mix(mix([190, 160, 105], [245, 228, 180], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.25);
+        if (lat > 70 * DEG) {   // the north-polar hexagon near 78° N with a bluish cap inside
+          const rho = 90 - lat / DEG, seg = ((lon % (Math.PI / 3)) + Math.PI / 3) % (Math.PI / 3) - Math.PI / 6;
+          const edge = 12 * Math.cos(Math.PI / 6) / Math.cos(seg);
+          if (rho < edge) c = mix(c, [120, 140, 160], 0.55 * smooth(clamp((edge - rho) / 3, 0, 1)));
+          if (Math.abs(rho - edge) < 0.7) c = mix(c, [110, 95, 70], 0.6);
+        }
+        return c;
       }
       case 'uranus':
         return mix([130, 205, 215], [175, 235, 240], (Math.sin(lat * 5) + 1) * 0.3 + (n - 0.5) * 0.4);
@@ -726,7 +761,7 @@
         const dl = (lat + 20 * DEG) / (7 * DEG), dn = Math.atan2(Math.sin(lon - 0.7), Math.cos(lon - 0.7)) / (14 * DEG);
         if (dl * dl + dn * dn < 1) c = [20, 32, 110];
         const st = fbm(x * 3 + 1, y * 14, z * 3, 3);   // thin bright cirrus streaks
-        if (st > 0.66) c = mix(c, [215, 230, 255], smooth(clamp((st - 0.66) / 0.08, 0, 1)) * 0.8);
+        if (st > 0.6) c = mix(c, [205, 222, 255], smooth(clamp((st - 0.6) / 0.16, 0, 1)) * 0.55);
         return c;
       }
     }
@@ -772,7 +807,7 @@
         if (uSun > 0.5) {
           vec4 t2 = texture2D(uTex, uv + vec2(0.004 * sin(uTime * 0.7), 0.003 * cos(uTime * 0.9)));
           vec3 sc = mix(t.rgb, t2.rgb, 0.5 + 0.5 * sin(uTime * 1.3 + t.r * 12.0));
-          return sc * mix(vec3(0.75, 0.28, 0.05), vec3(1.0), pow(c.z, 0.6)) * vec3(1.08, 1.0, 0.92);   // limb darkening reddens the edge
+          return sc * mix(vec3(0.85, 0.4, 0.1), vec3(1.0), pow(c.z, 0.6)) * vec3(1.08, 1.0, 0.92);   // limb darkening reddens the edge
         }
         float ndl = dot(c, uLc);
         float soft = smoothstep(-0.12, 0.18, ndl);
@@ -783,7 +818,7 @@
           float ocean = step(t.r + t.g * 0.5, t.b * 0.95);
           vec3 h = normalize(uLc + vec3(0.0, 0.0, 1.0));
           res += vec3(1.0, 0.92, 0.8) * pow(max(dot(c, h), 0.0), 70.0) * ocean * soft * 0.55 * (1.0 - cl);
-          res += vec3(1.0, 0.72, 0.38) * t.a * (1.0 - soft) * (1.0 - cl) * 1.1;
+          res += vec3(1.0, 0.8, 0.5) * t.a * (1.0 - soft) * (1.0 - cl) * 0.85;
         }
         res = mix(res, vec3(0.92, 0.95, 1.0) * (0.02 + lit), cl * 0.9);
         res *= mix(1.0, 0.45 + 0.55 * c.z, uBand);
@@ -810,8 +845,8 @@
           float cov = 1.0 - smoothstep(1.0 - uPix * 1.5, 1.0, r);
           col = vec4(shadeSurface(vec3(p, z)) * cov, cov);
         }
-        if (uSun > 0.5 && r > 1.0) {   // corona
-          float a = exp(-(r - 1.0) * 9.0) * 0.6;
+        if (uSun > 0.5 && r > 1.0 - uPix * 2.0) {   // corona, starting under the anti-aliased edge so no dark seam
+          float a = exp(-max(r - 1.0, 0.0) * 9.0) * 0.6;
           col.rgb += vec3(1.0, 0.6, 0.25) * a * (1.0 - col.a);
           col.a += a * (1.0 - col.a);
         }
@@ -1021,19 +1056,24 @@
     const kepler = r => TAU / (b.p1 * Math.pow(r, 1.5));
     const k = small ? 1 : 1.8;
     if (b.rings) {
-      const ring = ringProfile(b);
+      const ring = ringProfile(b), wsum = b.rings.reduce((t, q) => t + Math.max(q[1] - q[0], 0.012) * q[2], 0);
       const n = Math.round((b.id === 'saturn' ? 42000 : 2500) * k);
       for (let i = 0; i < n; i++) {
         let r, c;
         for (let tries = 0; tries < 30; tries++) {
           r = rnd(ring.rin, ring.rout);
           if (b.id === 'saturn') { c = ringColor(r); }
-          else { c = [0, 0, 0, 0]; for (const [r0, r1, dens, cols] of b.rings) if (r >= r0 && r <= r1) c = [...hexRgb(pick(cols)), Math.min(1, dens * 2)]; }
+          else {   // pick a ring by width × density, then a radius inside it, so no particle is wasted
+            let u = Math.random() * wsum, g = b.rings[0];
+            for (const q of b.rings) { g = q; if ((u -= Math.max(q[1] - q[0], 0.012) * q[2]) <= 0) break; }
+            r = rnd(g[0], g[1]); c = [...hexRgb(pick(g[3])), 1];
+          }
           if (Math.random() < c[3]) break;
         }
         const j = rnd(0.75, 1.25), flake = Math.random() < 0.008;
         const col = flake ? [255, 240, 215] : [Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)];
-        push(r, rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.07, 0.22)) * (b.id === 'saturn' ? 1 : 0.8), -1, col);
+        const arc = b.id === 'neptune' && r > 2.5 && Math.random() < 0.75;   // Adams ring: Liberté, Égalité, Fraternité, Courage within ~40°
+        push(r, arc ? rnd(0, 0.7) + (Math.random() < 0.3 ? 0.15 : 0) : rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.07, 0.22)) * (b.id === 'saturn' ? 1.15 - 0.45 * c[3] : 0.8), -1, col);
       }
     }
     if (!b.isSun) {
@@ -1068,7 +1108,7 @@
       gl.useProgram(P.part);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      const Mr = mul(Mc, rotX(b.tiltAx * DEG)), Tm = rotX(b.tiltAx * DEG);
+      const Tm = tiltM(b), Mr = mul(Mc, Tm);
       gl.uniformMatrix3fv(U.uMr, false, new Float32Array(tr(Mr)));
       gl.uniform3f(U.uLt, Tm[0] * Lw[0] + Tm[3] * Lw[1] + Tm[6] * Lw[2], Tm[1] * Lw[0] + Tm[4] * Lw[1] + Tm[7] * Lw[2], Tm[2] * Lw[0] + Tm[5] * Lw[1] + Tm[8] * Lw[2]);
       gl.uniform2f(U.uCenter, cx, cy);
@@ -1137,8 +1177,8 @@
             surf[k + 3] = 0;
             if (cloud) {
               if (c[1] > c[2] && Math.abs(lat) < 62 * DEG) {
-                const f = fbm(x * 16 + 3, y * 16, z * 16, 3);
-                surf[k + 3] = clamp((f - 0.56) * 5, 0, 1) * 255;
+                const f = fbm(x * 16 + 3, y * 16, z * 16, 3), sp = vnoise(x * 90, y * 90, z * 90);
+                surf[k + 3] = clamp((f - 0.56) * 5, 0, 1) * smooth(clamp((sp - 0.45) * 3, 0, 1)) * 210;
               }
               const f2 = fbm(x * 2.6 + 20, y * 4.2, z * 2.6, 5);
               const cov = smooth(clamp((f2 - 0.5) / 0.16, 0, 1)) * 255;
@@ -1181,7 +1221,7 @@
     if (r < 1.958) return [0, 0, 0, 0];                                                      // Huygens gap
     if (r < 2.025) return [140, 130, 115, 0.04 + 0.05 * n];                                  // Cassini Division
     if (r < 2.27) {                                                                          // A ring, Encke and Keeler gaps
-      if (r > 2.209 && r < 2.216) return [180, 170, 150, 0.02];
+      if (r > 2.214 && r < 2.219) return [180, 170, 150, 0.02];
       if (r > 2.262 && r < 2.264) return [180, 170, 150, 0.05];
       return [...mix([198, 184, 158], [232, 220, 196], n), 0.5 + (n - 0.5) * 0.2];
     }
@@ -1198,10 +1238,13 @@
       const r = rin + (i + 0.5) / N * (rout - rin);
       let c = [0, 0, 0, 0];
       if (b.id === 'saturn') c = ringColor(r);
-      else for (const [r0, r1, dens, cols] of b.rings) if (r >= r0 && r <= r1) c = [...hexRgb(cols[0]), Math.min(0.9, dens * 1.6)];
+      else for (const [r0, r1, dens, cols] of b.rings) if (r >= r0 && r <= r1) c = [...hexRgb(cols[0]), Math.min(0.9, dens * 1.6 + (r1 - r0 < 0.03 ? 0.45 : 0))];   // narrow rings stay visible once mip-averaged
       d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = clamp(c[3], 0, 0.97) * 255;
     }
-    return (b.ringTex = { tex: makeTex(d, N, 1, gl.CLAMP_TO_EDGE), rin, rout });
+    const tex = makeTex(d, N, 1, gl.CLAMP_TO_EDGE);   // makeTex leaves it bound
+    gl.generateMipmap(gl.TEXTURE_2D);                  // prefilter sub-pixel ringlets instead of point-sampling them into dashes
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    return (b.ringTex = { tex, rin, rout });
   }
 
   // atmosphere colour/strength and limb darkening per body
@@ -1214,7 +1257,7 @@
   // renders body `b` of screen radius R (css px) seen through camera matrix Mcam; returns the image half-size in radii
   function renderBodyGL(b, R, Mcam, Lw, spin, pxScale, hi, t, place) {
     const { U } = GLR;
-    const T = rotX(b.tiltAx * DEG), TS = mul(T, rotY(spin)), M = mul(Mcam, TS), Mr = mul(Mcam, T);
+    const T = tiltM(b), TS = mul(T, rotY(spin)), M = mul(Mcam, TS), Mr = mul(Mcam, T);
     const ring = ringProfile(b);
     const ext = ring ? ring.rout * 1.02 : b.isSun ? 1.6 : 1.12;   // the Sun's corona needs room
     let px = 0;
@@ -1314,7 +1357,7 @@
   // Altitude is compressed so low orbits hug the planet and the geostationary ring sits inside the Moon's orbit.
   const satR = altKm => 1 + 0.42 * Math.log(1 + Math.max(0, altKm) / 1000);
   const periodDays = (aKm, GM) => TAU * Math.sqrt(aKm * aKm * aKm / GM) / 86400;
-  const EARTH_SAT = { R: 6371, GM: 398600.4418 }, MARS_SAT = { R: 3389.5, GM: 42828.37 };
+  const EARTH_SAT = { R: 6378.137, GM: 398600.4418 }, MARS_SAT = { R: 3389.5, GM: 42828.37 };
   // circular orbit at altKm, or an ellipse from perigee altKm to apogee apoKm (then u is the argument of perigee)
   function orbitOf(altKm, incDeg, raan, u, apoKm, P = EARTH_SAT) {
     const i = incDeg * DEG;
@@ -1368,7 +1411,7 @@
     shell(560 * k, 1, 35786, 0.05, '#ffc46b', 1.1, 0.75);  // geostationary ring: one orbit per sidereal day, so it hangs over the same spot
     shell(66, 6, 780, 86.4, '#d9f0ff', 1.2, 0.8);          // Iridium
     for (let m = 0; m < 6; m++) {                          // Molniya: 12-hour ellipses with the apogee over the north
-      const q = orbitOf(500, 63.4, m * TAU / 6, Math.PI / 2, 39700); q.c = '#ffb0d0'; q.s = 1.6; q.o = 0.9; sats.push(q);
+      const q = orbitOf(500, 63.4, m * TAU / 6, -Math.PI / 2, 39700); q.c = '#ffb0d0'; q.s = 1.6; q.o = 0.9; sats.push(q);
     }
     const O = (alt, inc, raan, u, apo, name, big) => Object.assign(orbitOf(alt, inc, raan, u, apo), { name, big });
     const stations = [
@@ -1376,7 +1419,7 @@
       O(385, 41.47, 3.9, 2.2, undefined, 'Тяньгун', true),
       O(525, 28.47, 5.2, 4.1, undefined, 'Хаббл'),
       O(16000, 28.5, 2.0, 1.2, 133000, 'Чандра'),
-      O(500, 63.4, 0.6, Math.PI / 2, 39700, 'Молния'),
+      O(500, 63.4, 0.6, -Math.PI / 2, 39700, 'Молния'),
       O(780, 86.4, 4.6, 0.8, undefined, 'Iridium'),
       O(705, 98.2, 3.1, 2.9, undefined, 'Landsat 9'),
       O(35786, 0.05, 0, 0.3, undefined, 'GOES-19'),
@@ -1714,6 +1757,13 @@
     const [x, , z] = planetPos(b);
     const L = Math.hypot(x, z) || 1, lx = -x / L, lz = -z / L;
     cYaw = b.isSun ? 0 : Math.atan2(0.3, -0.95) - Math.atan2(lz, lx);
+    // moons with a known mean longitude start where they really are; express it in the moon's orbit frame
+    for (const m of C.moons) if (m.L0 !== undefined) {
+      const lam = (m.L0 + 360 / m.P * days) * DEG, e = [Math.cos(lam), 0, -Math.sin(lam)];
+      const Mi = m.inc ? mul(tiltM(b), rotX(m.inc * DEG)) : tiltM(b);
+      const lx2 = Mi[0] * e[0] + Mi[3] * e[1] + Mi[6] * e[2], lz2 = Mi[2] * e[0] + Mi[5] * e[1] + Mi[8] * e[2];
+      m.ph = Math.atan2(-lz2, lx2);
+    }
     return C;
   }
 
@@ -1721,7 +1771,7 @@
     const C = b.close;
     const R = closeR * cZoom;
     const Mc = closeCam();
-    const T = rotX(b.tiltAx * DEG);
+    const T = tiltM(b);
     const spin = (TAU * days / b.rot) % TAU;
     // sunlight in world and in body coordinates
     const [wx, , wz] = planetPos(b);
