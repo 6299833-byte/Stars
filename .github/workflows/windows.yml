@@ -66,7 +66,7 @@ jobs:
         run: |
           Copy-Item -Recurse out smoke
           $cfg = Get-Content smoke/config.json -Raw | ConvertFrom-Json
-          $cfg.autostart = $false; $cfg.pause_battery = $false; $cfg.pause_remote = $false
+          $cfg.autostart = $false; $cfg.pause_battery = $false; $cfg.pause_remote = $false; $cfg.quality = "ultra"; $cfg.fps = 60
           $cfg | ConvertTo-Json | Set-Content smoke/config.json -Encoding utf8
           $p = Start-Process smoke/StarsDesktop.exe -PassThru
           Start-Sleep -Seconds 30

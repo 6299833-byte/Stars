@@ -106,7 +106,7 @@ sealed class MonitorSettings
         ("neptune", "Нептун"), ("far", "За пределами: соседние звёзды"),
     };
 
-    public bool MilkyWay => Scene == "milkyway";
+    [JsonIgnore] public bool MilkyWay => Scene == "milkyway";
 
     public string Url(string quality) => MilkyWay
         ? "https://stars.local/milky-way.html#wallpaper"
