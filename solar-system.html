@@ -129,6 +129,7 @@
       <div class="chips">
         <button id="t-names" aria-pressed="false">Названия: скрыть</button>
         <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
+        <button id="t-const" aria-pressed="true">Созвездия</button>
         <button id="t-sky">Фон: скопление Девы</button>
       </div>
     </div>
@@ -708,6 +709,77 @@
     const ye = y * Math.cos(e) + z * Math.sin(e), ze = -y * Math.sin(e) + z * Math.cos(e);
     return [x, ze, -ye];
   };
+  // ---------- constellations on the sky behind close-ups ----------
+  // Bright stars, J2000 RA (hours) / Dec (degrees), from memory of the Yale Bright Star Catalogue; m = magnitude.
+  const S = (ra, dec, m, name) => ({ ra, dec, m, name });
+  const CONSTELLATIONS = [
+    { name: 'Большая Медведица', st: [S(11.062, 61.75, 1.8), S(11.031, 56.38, 2.4), S(11.897, 53.69, 2.4), S(12.257, 57.03, 3.3), S(12.900, 55.96, 1.8), S(13.399, 54.93, 2.2), S(13.792, 49.31, 1.9)],
+      ln: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]] },
+    { name: 'Малая Медведица', st: [S(2.530, 89.26, 2.0, 'Полярная'), S(17.537, 86.59, 4.4), S(16.766, 82.04, 4.2), S(15.734, 77.79, 4.3), S(14.845, 74.16, 2.1), S(15.345, 71.83, 3.0), S(16.292, 75.76, 4.9)],
+      ln: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]] },
+    { name: 'Орион', st: [S(5.919, 7.41, 0.5, 'Бетельгейзе'), S(5.419, 6.35, 1.6), S(5.679, -1.94, 1.8), S(5.604, -1.20, 1.7), S(5.533, -0.30, 2.2), S(5.796, -9.67, 2.1), S(5.242, -8.20, 0.1, 'Ригель'), S(5.585, 9.93, 3.4)],
+      ln: [[0, 2], [1, 4], [2, 3], [3, 4], [2, 5], [4, 6], [0, 7], [7, 1]] },
+    { name: 'Кассиопея', st: [S(0.153, 59.15, 2.3), S(0.675, 56.54, 2.2), S(0.945, 60.72, 2.5), S(1.430, 60.24, 2.7), S(1.907, 63.67, 3.4)],
+      ln: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+    { name: 'Лебедь', st: [S(20.690, 45.28, 1.3, 'Денеб'), S(20.370, 40.26, 2.2), S(20.770, 33.97, 2.5), S(19.750, 45.13, 2.9), S(19.512, 27.96, 3.1)],
+      ln: [[0, 1], [1, 4], [3, 1], [1, 2]] },
+    { name: 'Лира', st: [S(18.616, 38.78, 0.0, 'Вега'), S(18.746, 37.61, 4.3), S(18.908, 36.90, 4.3), S(18.982, 32.69, 3.2), S(18.835, 33.36, 3.5)],
+      ln: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 1]] },
+    { name: 'Орёл', st: [S(19.846, 8.87, 0.8, 'Альтаир'), S(19.771, 10.61, 2.7), S(19.922, 6.41, 3.7)], ln: [[1, 0], [0, 2]] },
+    { name: 'Скорпион', st: [S(16.490, -26.43, 1.0, 'Антарес'), S(16.091, -19.81, 2.6), S(16.006, -22.62, 2.3), S(15.981, -26.11, 2.9), S(16.353, -25.59, 2.9),
+      S(16.598, -28.22, 2.8), S(16.836, -34.29, 2.3), S(16.864, -38.05, 3.0), S(16.910, -42.36, 3.6), S(17.202, -43.24, 3.3), S(17.622, -43.00, 1.9), S(17.793, -40.13, 3.0), S(17.708, -39.03, 2.4), S(17.560, -37.10, 1.6)],
+      ln: [[1, 2], [2, 3], [2, 4], [4, 0], [0, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13]] },
+    { name: 'Южный Крест', st: [S(12.443, -63.10, 0.8), S(12.795, -59.69, 1.3), S(12.519, -57.11, 1.6), S(12.252, -58.75, 2.8)], ln: [[0, 2], [1, 3]] },
+    { name: 'Лев', st: [S(10.139, 11.97, 1.4, 'Регул'), S(10.122, 16.76, 3.5), S(10.333, 19.84, 2.0), S(10.278, 23.42, 3.4), S(9.879, 26.01, 3.9), S(11.235, 20.52, 2.6), S(11.818, 14.57, 2.1), S(11.237, 15.43, 3.3)],
+      ln: [[0, 1], [1, 2], [2, 3], [3, 4], [2, 5], [5, 6], [6, 7], [7, 0]] },
+    { name: 'Близнецы', st: [S(7.577, 31.89, 1.6, 'Кастор'), S(7.755, 28.03, 1.1, 'Поллукс'), S(6.629, 16.40, 1.9), S(6.732, 25.13, 3.0), S(6.383, 22.51, 2.9), S(7.335, 21.98, 3.5)],
+      ln: [[0, 1], [0, 3], [3, 4], [1, 5], [5, 2]] },
+    { name: 'Телец', st: [S(4.599, 16.51, 0.9, 'Альдебаран'), S(5.438, 28.61, 1.7), S(5.627, 21.14, 3.0), S(4.477, 19.18, 3.5), S(4.330, 15.63, 3.6), S(3.791, 24.11, 2.9, 'Плеяды')],
+      ln: [[4, 0], [0, 2], [4, 3], [3, 1]] },
+    { name: 'Пегас', st: [S(23.079, 15.21, 2.5), S(23.063, 28.08, 2.4), S(0.221, 15.18, 2.8), S(0.140, 29.09, 2.1)], ln: [[0, 1], [1, 3], [3, 2], [2, 0]] },
+  ];
+  const BRIGHT = [S(6.752, -16.72, -1.5, 'Сириус'), S(6.399, -52.70, -0.7, 'Канопус'), S(14.261, 19.18, -0.1, 'Арктур'), S(5.278, 46.0, 0.1, 'Капелла'),
+    S(7.655, 5.22, 0.4, 'Процион'), S(1.629, -57.24, 0.5, 'Ахернар'), S(13.420, -11.16, 1.0, 'Спика'), S(22.961, -29.62, 1.2, 'Фомальгаут'), S(14.66, -60.83, -0.3, 'Альфа Центавра')];
+  for (const c of CONSTELLATIONS) for (const st of c.st) st.v = raDec(st.ra, st.dec);
+  for (const st of BRIGHT) st.v = raDec(st.ra, st.dec);
+  let showConst = true;
+  // stars are effectively at infinity: project their directions through the close-up camera (gnomonic, wide field)
+  function drawConstellations(Mc, A) {
+    const tag = (txt, x, y) => { const w = ctx.measureText(txt).width; ctx.fillText(txt, x + 6 + w > W - 4 ? x - 6 - w : x + 6, y); };
+    const f = Math.max(W, H) * 0.55, cx = W / 2, cy = H / 2;
+    const P = v => {
+      const a = Mc[0] * v[0] + Mc[1] * v[1] + Mc[2] * v[2], b = Mc[3] * v[0] + Mc[4] * v[1] + Mc[5] * v[2], d = Mc[6] * v[0] + Mc[7] * v[1] + Mc[8] * v[2];
+      return d < -0.15 ? [cx + f * a / -d, cy + f * b / -d] : null;
+    };
+    ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace'; ctx.textBaseline = 'middle';
+    const dot = (p, m) => {
+      const r = Math.max(0.8, 2.6 - m * 0.55);
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = A * clamp(1.1 - m * 0.18, 0.35, 1);
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, TAU); ctx.fill();
+    };
+    for (const c of CONSTELLATIONS) {
+      const pp = c.st.map(st => P(st.v));
+      ctx.strokeStyle = 'rgba(150,185,255,1)'; ctx.lineWidth = 1; ctx.globalAlpha = 0.32 * A;
+      ctx.beginPath();
+      for (const [i, j] of c.ln) if (pp[i] && pp[j]) { ctx.moveTo(...pp[i]); ctx.lineTo(...pp[j]); }
+      ctx.stroke();
+      let sx = 0, sy = 0, n = 0;
+      c.st.forEach((st, i) => { if (!pp[i]) return; dot(pp[i], st.m); sx += pp[i][0]; sy += pp[i][1]; n++;
+        if (st.name && namesOn()) { ctx.globalAlpha = 0.7 * A; ctx.fillStyle = '#e8eeff'; tag(st.name, pp[i][0], pp[i][1]); } });
+      if (n && namesOn() && sx / n > 0 && sx / n < W && sy / n > 0 && sy / n < H) {
+        ctx.globalAlpha = 0.55 * A; ctx.fillStyle = '#9fbfff';
+        const w = ctx.measureText(c.name.toUpperCase()).width;
+        ctx.fillText(c.name.toUpperCase(), sx / n - w / 2, sy / n + 16);
+      }
+    }
+    for (const st of BRIGHT) {
+      const p = P(st.v); if (!p) continue;
+      dot(p, st.m);
+      if (namesOn()) { ctx.globalAlpha = 0.7 * A; ctx.fillStyle = '#e8eeff'; tag(st.name, p[0], p[1]); }
+    }
+    ctx.globalAlpha = 1;
+  }
+
   const STAR_SYSTEMS = [
     { id: 'alphacen', name: 'Альфа Центавра', ra: 14.66, dec: -60.83, ly: 4.37, col: '#fff1d0', r: 3.8, comp: [{ col: '#ffd59a', sep: 9 }, { col: '#ff8a5c', sep: 26, small: true }],
       planets: [{ name: 'Проксима b', P: 11.19 }, { name: 'Проксима d', P: 5.12 }],
@@ -2239,6 +2311,8 @@
     skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: Rubin’s Cosmos' }[skyMode];
     resetStars();
   });
+  const constBtn = document.getElementById('t-const');
+  constBtn.addEventListener('click', () => { showConst = !showConst; constBtn.setAttribute('aria-pressed', String(showConst)); });
   const smallBtn = document.getElementById('t-small');
   smallBtn.addEventListener('click', () => {
     showSmall = !showSmall; smallBtn.setAttribute('aria-pressed', String(showSmall));
@@ -2396,6 +2470,7 @@
     if (closeK > 0 && sel) {
       ctx.globalAlpha = e; ctx.drawImage(sel.isSun ? bgSun : bgClose, 0, 0, W, H); ctx.globalAlpha = 1;
       drawStars(e);
+      if (showConst) drawConstellations(closeCam(), e);
       closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
       // the close-up grows out of the body's spot in the overview
       const s0 = clamp((sel.sr || 4) / closeR, 0.01, 1);
