@@ -15,7 +15,7 @@ const p = await b.newPage({ viewport: { width: 430, height: 932 }, deviceScaleFa
 await p.goto('file:///home/user/Stars/solar-system.html');
 ```
 
-Open the menu with `#menu-btn`, pick bodies with `#b-<id>` (`sun`, `mercury` … `neptune`, `all`), pause with `#s-0`. Wait 9–14 s after choosing a body. Keep scripts and images in the session scratchpad, never in the repo. Look at the images you capture (Read them) before judging.
+Controls live in a hidden menu, so click them programmatically: `p.$eval('#b-<id>', e => e.click())` (`sun`, `mercury` … `neptune`, `all`), pause with `#s-0`. Wait ~45 s after choosing a body (emulated WebGL is slow); use one browser per close-up and run them in parallel. Keep scripts and images in the session scratchpad, never in the repo. Look at the images you capture (Read them) before judging.
 
 For each view, say what reads as cheap or broken (banding, aliasing, flat lighting, washed-out bloom, particles that look like noise, mismatched colour between planet and background, unreadable labels) and what would make it look like the reference.
 
