@@ -49,9 +49,12 @@ jobs:
           java-version: 21
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
-
-      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      # the ubuntu runner ships the Android SDK; setup-android@v3 fails on the removed 'tools' package
+      - name: Android SDK platform 36
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Debug APK
         working-directory: android/project
@@ -97,11 +100,12 @@ jobs:
           java-version: 21
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK platform 36
         if: env.HAS_KEY == 'true'
-
-      - if: env.HAS_KEY == 'true'
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Signed AAB and APK
         if: env.HAS_KEY == 'true'
