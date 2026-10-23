@@ -1,0 +1,8 @@
+{
+  "ics_url": "",
+  "show_text": true,
+  "max_notifications": 12,
+  "notification_hours": 12,
+  "days_ahead": 7,
+  "port": 8777
+}

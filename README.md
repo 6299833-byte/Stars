@@ -24,6 +24,7 @@
 | `scripts/build-www.mjs` | Скрипт сборки `www/` |
 | `package.json`, `capacitor.config.json` | Настройки сборки Android |
 | `.github/workflows/android.yml` | Автосборка APK в GitHub Actions |
+| `desktop/` | Живые обои для Windows: помощник `stars_helper.py`, настройки, инструкция |
 | `.claude/agents/` | Описания агентов: отдел графики, астроном, отдел Android, поиск ошибок |
 
 ---
@@ -56,6 +57,10 @@ cd android/project && ./gradlew assembleDebug
 ```
 
 ---
+
+## Живые обои для Windows
+
+Папка `desktop/`: Солнечная система как живые обои рабочего стола (Lively Wallpaper или Wallpaper Engine). Справа часы, встречи из календаря Outlook и новые сообщения Outlook и WhatsApp Web. Помощник `stars_helper` читает календарь по ссылке ICS и уведомления Windows и работает только на компьютере. Режим обоев включается адресом `…#wallpaper`: меню скрыто, камера сама облетает планеты, около 30 кадров в секунду. Готовый `stars_helper.exe` собирает GitHub Actions (сборка «Windows wallpaper», артефакт `stars-wallpaper-windows`). Пошаговая установка в [desktop/README.md](desktop/README.md).
 
 ## Управление
 

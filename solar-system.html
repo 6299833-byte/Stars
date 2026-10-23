@@ -85,11 +85,62 @@
   .about a { color: var(--chip-on-line); }
   .about small { color: var(--muted); font-size: 10.5px; }
   button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
+  /* wallpaper mode (#wallpaper): no menu, a glass side panel with clock, meetings and messages */
+  body.wall .menu-btn, body.wall .panel { display: none !important; }
+  .wall-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); box-sizing: border-box;
+    padding-block: 48px 40px; padding-left: 28px; padding-right: max(28px, env(safe-area-inset-right, 0px));
+    display: flex; flex-direction: column; gap: 22px; pointer-events: none;
+    background: linear-gradient(90deg, rgba(2,3,9,0) 0%, rgba(2,3,9,0.55) 18%, rgba(2,3,9,0.72) 100%);
+    text-shadow: 0 0 10px var(--space);
+  }
+  .wall-clock { font: 500 78px/0.9 var(--serif); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .wall-date { font: 12px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
+  .wall-sec h3 { margin: 0 0 10px; font: 10px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .wall-list { display: flex; flex-direction: column; gap: 9px; margin: 0; padding: 0; list-style: none; }
+  .wall-ev { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+  .wall-ev time { font: 12px/1.3 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .wall-ev b { font: 500 17px/1.25 var(--serif); display: block; overflow-wrap: anywhere; }
+  .wall-ev small { font: 10.5px/1.3 var(--mono); color: var(--muted); }
+  .wall-ev.now b { color: var(--chip-on-line); }
+  .wall-next { font: italic 17px/1.3 var(--serif); color: var(--chip-on-line); }
+  .wall-msg { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: start; animation: wall-in 0.6s ease-out; }
+  .wall-msg i { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+  .wall-msg i.whatsapp { background: #4fd18b; box-shadow: 0 0 10px #4fd18b; }
+  .wall-msg i.outlook { background: #4c9cff; box-shadow: 0 0 10px #4c9cff; }
+  .wall-msg b { font: 500 15px/1.25 var(--serif); }
+  .wall-msg p { margin: 2px 0 0; font: 12px/1.4 var(--mono); color: var(--ink); opacity: 0.8; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .wall-msg time { font: 10.5px/1.4 var(--mono); color: var(--muted); white-space: nowrap; }
+  .wall-note { font: 11px/1.5 var(--mono); color: var(--muted); }
+  @media (min-width: 1200px) {
+    .wall-panel { width: 460px; padding-block: 72px 56px; padding-left: 40px; padding-right: max(56px, env(safe-area-inset-right, 0px)); gap: 30px; }
+    .wall-clock { font-size: 112px; }
+    .wall-date { font-size: 14px; }
+    .wall-sec h3 { font-size: 11.5px; }
+    .wall-ev { grid-template-columns: 112px minmax(0, 1fr); }
+    .wall-ev time { font-size: 14px; }
+    .wall-ev b { font-size: 21px; }
+    .wall-ev small, .wall-msg time { font-size: 12px; }
+    .wall-next { font-size: 21px; }
+    .wall-msg b { font-size: 18px; }
+    .wall-msg p { font-size: 14px; }
+  }
+  @keyframes wall-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .wall-msg { animation: none; } }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400&display=swap">
 
 <canvas id="sky"></canvas>
 
+
+<aside class="wall-panel" id="wall" hidden aria-live="polite">
+  <div><div class="wall-clock" id="w-clock">—</div><div class="wall-date" id="w-date"></div></div>
+  <div class="wall-next" id="w-next" hidden></div>
+  <section class="wall-sec"><h3>Встречи сегодня</h3><ul class="wall-list" id="w-events"></ul></section>
+  <section class="wall-sec" id="w-later-sec" hidden><h3>Дальше</h3><ul class="wall-list" id="w-later"></ul></section>
+  <section class="wall-sec"><h3>Сообщения</h3><ul class="wall-list" id="w-msgs"></ul></section>
+  <div class="wall-note" id="w-note" hidden></div>
+</aside>
 
 <button class="menu-btn" id="menu-btn" aria-label="Меню" aria-expanded="false" aria-controls="panel"><span></span><span></span><span></span></button>
 
@@ -2430,9 +2481,89 @@
     b.texJob = textureJob(b, small ? 512 : 1024); texQueue.push(b);
   });
 
+  // ---------- wallpaper mode (#wallpaper): Lively Wallpaper on Windows with the Stars helper ----------
+  const WALL = location.hash === '#wallpaper' || /[?&]wallpaper\b/.test(location.search);
+  if (WALL) {
+    document.body.classList.add('wall');
+    const wall = document.getElementById('wall'); wall.hidden = false;
+    const $ = id => document.getElementById(id);
+    const hm = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const dayFmt = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+    const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'сейчас' : m < 60 ? `${m} мин` : `${Math.round(m / 60)} ч`; };
+    const until = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m} мин` : `${Math.floor(m / 60)} ч ${m % 60} мин`; };
+    let feed = null, seen = new Set();
+    const li = (cls, parts) => { const el = document.createElement('li'); el.className = cls; for (const p of parts) el.append(p); return el; };
+    const tag = (name, text, cls) => { const el = document.createElement(name); if (text !== undefined) el.textContent = text; if (cls) el.className = cls; return el; };
+    function renderWall() {
+      const now = new Date();
+      $('w-clock').textContent = hm.format(now);
+      $('w-date').textContent = dayFmt.format(now);
+      if (!feed) return;
+      const today = now.toDateString();
+      const evs = (feed.events || []).map(e => ({ ...e, s: new Date(e.start), f: new Date(e.end) }))
+        .filter(e => e.f > now && (e.s.toDateString() === today || (e.all_day && e.s <= now)));
+      const evList = $('w-events'); evList.replaceChildren();
+      for (const e of evs.slice(0, 7)) {
+        const live = !e.all_day && e.s <= now && now < e.f;
+        const info = tag('div'); info.append(tag('b', e.title));
+        const meta = [e.where, e.online ? 'онлайн' : ''].filter(Boolean).join(' · ');
+        if (meta) info.append(tag('small', meta));
+        evList.append(li('wall-ev' + (live ? ' now' : ''), [tag('time', e.all_day ? 'весь день' : `${hm.format(e.s)}–${hm.format(e.f)}`), info]));
+      }
+      if (!evs.length) evList.append(li('wall-note', [feed.calendar_error || 'Встреч больше нет']));
+      // the next few meetings on the following days
+      const wd = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' });
+      const later = (feed.events || []).map(e => ({ ...e, s: new Date(e.start), f: new Date(e.end) }))
+        .filter(e => !e.all_day && e.s.toDateString() !== today && e.s > now).slice(0, 4);
+      $('w-later-sec').hidden = !later.length;
+      $('w-later').replaceChildren(...later.map(e => { const info = tag('div'); info.append(tag('b', e.title));
+        return li('wall-ev', [tag('time', `${wd.format(e.s)} ${hm.format(e.s)}`), info]); }));
+      const next = evs.find(e => !e.all_day && e.s > now);
+      const nx = $('w-next');
+      const cur = evs.find(e => !e.all_day && e.s <= now && now < e.f);
+      nx.hidden = !(next || cur);
+      if (cur) nx.textContent = `Сейчас: ${cur.title} · ещё ${until(cur.f - now)}`;
+      else if (next) nx.textContent = `Через ${until(next.s - now)}: ${next.title}`;
+      const ml = $('w-msgs'); ml.replaceChildren();
+      for (const m of (feed.notifications || []).slice(0, 8)) {
+        const key = m.time + m.from;
+        const body = tag('div'); body.append(tag('b', m.from)); if (m.text) body.append(tag('p', m.text));
+        const el = li('wall-msg', [tag('i', undefined, m.app), body, tag('time', ago(new Date(m.time)))]);
+        if (seen.has(key)) el.style.animation = 'none';
+        seen.add(key); ml.append(el);
+      }
+      if (!(feed.notifications || []).length) ml.append(li('wall-note', [feed.notifications_error || 'Новых сообщений нет']));
+    }
+    async function pull() {
+      try {
+        const r = await fetch('/api/feed', { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status);
+        feed = await r.json(); $('w-note').hidden = true;
+      } catch (e) {
+        $('w-note').hidden = false;
+        $('w-note').textContent = 'Встречи и сообщения появятся, когда запущен помощник Stars (stars_helper).';
+      }
+      renderWall();
+    }
+    pull(); setInterval(pull, 15000); setInterval(renderWall, 20000);
+    // slow automatic tour: overview, then planets one by one, now and then the view beyond
+    const tour = [null, 'earth', 'saturn', null, 'jupiter', 'mars', 'far', 'uranus', null, 'neptune', 'sun'];
+    let ti = 0;
+    const step = () => {
+      const id = tour[ti++ % tour.length];
+      choose(id === null ? null : id === 'far' ? FAR : BODIES.find(b => b.id === id));
+    };
+    setInterval(step, 50000);
+    // drift around slowly instead of waiting for a finger
+    setInterval(() => { vYaw = 0.0006; vcYaw = 0.0008; }, 1000);
+  }
+
   // ---------- frame loop ----------
   let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0, frameDays = 0;
+  let lastDraw = 0;
   function frame(now) {
+    if (WALL && now - lastDraw < 32) { requestAnimationFrame(frame); return; }   // ~30 fps on the desktop
+    lastDraw = now;
     // rAF timestamps can predate the start time (e.g. a page opened in the background): never step time backwards
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
     const dDays = speed * dt;
