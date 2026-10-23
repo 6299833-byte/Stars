@@ -349,11 +349,12 @@
       const c = p.ov || (p.ov = { cv: document.createElement('canvas'), t: -1, pr: 0, ext: 1 });
       if (t - c.t > 0.2 || Math.abs(pr - c.pr) > pr * 0.04) {
         const [wx, , wz] = planetPos(p), wl = Math.hypot(wx, wz) || 1;
-        c.ext = renderBodyGL(p, pr, M_ov, [-wx / wl, 0, -wz / wl], (TAU * days / p.rot) % TAU, DPR, false, t);
-        if (c.cv.width !== glc.width) c.cv.width = c.cv.height = glc.width;
+        const o = renderBodyGL(p, pr, M_ov, [-wx / wl, 0, -wz / wl], (TAU * days / p.rot) % TAU, DPR, false, t);
+        c.ext = o.ext;
+        if (c.cv.width !== o.px) c.cv.width = c.cv.height = o.px;
         const cc = c.cv.getContext('2d');
-        cc.clearRect(0, 0, c.cv.width, c.cv.height);
-        cc.drawImage(glc, 0, 0);
+        cc.clearRect(0, 0, o.px, o.px);
+        cc.drawImage(glc, 0, glc.height - o.px, o.px, o.px, 0, 0, o.px, o.px);
         c.t = t; c.pr = pr;
       }
       ctx.drawImage(c.cv, x - c.ext * pr, y - c.ext * pr, 2 * c.ext * pr, 2 * c.ext * pr);
@@ -454,7 +455,8 @@
         let c = mix([30, 60, 185], [70, 110, 235], n);
         const dl = (lat + 20 * DEG) / (7 * DEG), dn = Math.atan2(Math.sin(lon - 0.7), Math.cos(lon - 0.7)) / (14 * DEG);
         if (dl * dl + dn * dn < 1) c = [20, 32, 110];
-        if (fbm(x * 4 + 1, y * 9, z * 4, 3) > 0.68) c = [215, 230, 255];
+        const st = fbm(x * 3 + 1, y * 14, z * 3, 3);   // thin bright cirrus streaks
+        if (st > 0.66) c = mix(c, [215, 230, 255], smooth(clamp((st - 0.66) / 0.08, 0, 1)) * 0.8);
         return c;
       }
     }
@@ -474,15 +476,19 @@
 
   function initGL() {
     const VS = `
-      attribute vec2 aPos; uniform float uExt; varying vec2 vP;
-      void main() { vP = vec2(aPos.x, -aPos.y) * uExt; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+      attribute vec2 aPos; uniform float uExt, uRpx; uniform vec2 uCenter, uView; varying vec2 vP;
+      void main() {
+        vP = vec2(aPos.x, -aPos.y) * uExt;
+        vec2 pos = uCenter + vP * uRpx;
+        gl_Position = vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0);
+      }`;
     const FS = `
       precision highp float;
       varying vec2 vP;
       uniform sampler2D uTex, uCloud, uRing;
       uniform mat3 uMb, uMt;
       uniform vec3 uLc, uLt, uAtm;
-      uniform float uAtmK, uBand, uSun, uSpec, uHasCloud, uHasRing, uRin, uRout, uPix, uTime, uCloudOff;
+      uniform float uAtmK, uBand, uSun, uSpec, uHasCloud, uHasRing, uRin, uRout, uPix, uTime, uCloudOff, uRingK;
       const float PI = 3.14159265;
       vec2 sphUV(vec3 b) { return vec2(atan(b.z, b.x) / (2.0 * PI) + 0.5, 0.5 - asin(clamp(b.y, -1.0, 1.0)) / PI); }
       float ringA(float rr) {
@@ -517,6 +523,9 @@
           if (s > 0.0) { vec3 h2 = q + s * uLt; res *= 1.0 - 0.85 * ringA(length(h2.xz)); }
         }
         res += uAtm * uAtmK * pow(1.0 - c.z, 3.0) * (soft * 0.85 + 0.05);
+        res += vec3(0.9, 0.95, 1.0) * pow(1.0 - c.z, 7.0) * soft * uBand * 0.6;        // glossy rim light
+        vec3 hh = normalize(uLc + vec3(0.0, 0.0, 1.0));
+        res += vec3(1.0) * pow(max(dot(c, hh), 0.0), 24.0) * uBand * 0.12 * soft;      // soft sheen
         return res;
       }
       void main() {
@@ -549,7 +558,8 @@
               if (sign(qz.y) != sign(uLt.y)) k *= 0.55;                      // looking at the unlit face
               float d = dot(q, uLt);
               if (d < 0.0 && dot(q, q) - d * d < 1.0) k *= 0.06;             // planet's shadow
-              col = vec4(rt.rgb * k * rt.a, rt.a) + col * (1.0 - rt.a);
+              float ra = rt.a * uRingK;
+              col = vec4(rt.rgb * k * ra, ra) + col * (1.0 - ra);
             }
           }
         }
@@ -573,11 +583,223 @@
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
     const U = {};
     ['uTex', 'uCloud', 'uRing', 'uMb', 'uMt', 'uLc', 'uLt', 'uAtm', 'uAtmK', 'uBand', 'uSun', 'uSpec', 'uHasCloud', 'uHasRing',
-     'uRin', 'uRout', 'uPix', 'uTime', 'uCloudOff', 'uExt'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+     'uRin', 'uRout', 'uPix', 'uTime', 'uCloudOff', 'uExt', 'uRpx', 'uCenter', 'uView', 'uRingK'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
     gl.uniform1i(U.uTex, 0); gl.uniform1i(U.uCloud, 1); gl.uniform1i(U.uRing, 2);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     const blank = makeTex(new Uint8Array(4), 1, 1, gl.CLAMP_TO_EDGE);
-    return { U, blank };
+    return { U, blank, prog, buf, aPos, sh };
+  }
+
+  // =====================================================================
+  // GPU close-up scene: tens of thousands of ring and dust particles, each drawn as a soft streak
+  // stretched along its orbit (motion blur) and larger when nearer the camera, then a bloom pass
+  // so bright parts glow like in the reference video.
+  // =====================================================================
+  const tr = M => [M[0], M[3], M[6], M[1], M[4], M[7], M[2], M[5], M[8]];
+  let SC = null;
+  function initScene() {
+    const link = (vs, fs) => {
+      const pr = gl.createProgram();
+      gl.attachShader(pr, GLR.sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, GLR.sh(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(pr);
+      return pr;
+    };
+    const part = link(`
+      attribute vec4 aOrb;   // radius, start angle, height, angular speed (rad/day)
+      attribute vec4 aLook;  // size (css px), brightness, twinkle phase (<0: none), unused
+      attribute vec3 aCol;
+      uniform mat3 uMr; uniform vec3 uLt;
+      uniform vec2 uCenter, uView;
+      uniform float uRpx, uDpr, uDays, uTime, uStreak, uAlpha, uOut;
+      varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
+      void main() {
+        float a = aOrb.y + aOrb.w * uDays, r = aOrb.x;
+        vec3 q = vec3(r * cos(a), aOrb.z, r * sin(a));
+        vec3 c = uMr * q;
+        vec3 tc = uMr * vec3(-sin(a), 0.0, cos(a));
+        float vis = (c.z < 0.0 && dot(c.xy, c.xy) < 1.0) ? 0.0 : 1.0;    // behind the planet
+        float d = dot(q, uLt);
+        if (d < 0.0 && dot(q, q) - d * d < 1.0) vis *= 0.06;             // in the planet's shadow
+        float tw = aLook.z >= 0.0 ? 0.5 + 0.5 * sin(uTime * 2.2 + aLook.z) : 1.0;
+        float wid = aLook.x * uDpr * (1.0 + 0.3 * c.z / uOut);
+        float dl = length(tc.xy);
+        vec2 dir = dl > 1e-4 ? tc.xy / dl : vec2(1.0, 0.0);
+        float len = wid * 1.6 + min(aOrb.w * r * uRpx * uStreak * dl, 16.0 * uDpr);
+        vSize = len + 2.0;
+        vec2 pos = uCenter + c.xy * uRpx;
+        gl_Position = vis > 0.0 ? vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0) : vec4(2.0, 2.0, 0.0, 1.0);
+        gl_PointSize = vSize;
+        vCol = aCol * aLook.y * tw * vis * uAlpha;
+        vDir = dir; vLen = len; vWid = wid;
+      }`, `
+      precision mediump float;
+      varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
+      void main() {
+        vec2 q = (gl_PointCoord - 0.5) * vSize;
+        float al = dot(q, vDir), ac = dot(q, vec2(-vDir.y, vDir.x));
+        float e = al * al / (vLen * vLen * 0.25 + 0.01) + ac * ac / (vWid * vWid * 0.25 + 0.01);
+        float k = exp(-e * 2.2);
+        if (k < 0.01) discard;
+        vec3 c = vCol * k;
+        gl_FragColor = vec4(c, max(c.r, max(c.g, c.b)));
+      }`);
+    const QV = `attribute vec2 aPos; varying vec2 vUv; void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+    const bright = link(QV, `
+      precision mediump float; varying vec2 vUv; uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uThr;
+      void main() {
+        vec4 s = (texture2D(uSrc, vUv + uTexel * vec2(-1.0, -1.0)) + texture2D(uSrc, vUv + uTexel * vec2(1.0, -1.0)) +
+                  texture2D(uSrc, vUv + uTexel * vec2(-1.0, 1.0)) + texture2D(uSrc, vUv + uTexel * vec2(1.0, 1.0))) * 0.25;
+        float l = max(s.r, max(s.g, s.b));
+        gl_FragColor = vec4(s.rgb * smoothstep(uThr, uThr + 0.35, l), 1.0);
+      }`);
+    const blur = link(QV, `
+      precision mediump float; varying vec2 vUv; uniform sampler2D uSrc; uniform vec2 uDir;
+      void main() {
+        vec3 c = texture2D(uSrc, vUv).rgb * 0.227;
+        c += (texture2D(uSrc, vUv + uDir * 1.385).rgb + texture2D(uSrc, vUv - uDir * 1.385).rgb) * 0.316;
+        c += (texture2D(uSrc, vUv + uDir * 3.231).rgb + texture2D(uSrc, vUv - uDir * 3.231).rgb) * 0.070;
+        gl_FragColor = vec4(c, 1.0);
+      }`);
+    const fin = link(QV, `
+      precision mediump float; varying vec2 vUv; uniform sampler2D uScene, uBloom; uniform float uBloomK, uFade;
+      void main() {
+        vec4 s = texture2D(uScene, vUv);
+        vec3 c = s.rgb + texture2D(uBloom, vUv).rgb * uBloomK;
+        float a = clamp(max(s.a, max(c.r, max(c.g, c.b))), 0.0, 1.0);
+        gl_FragColor = vec4(min(c, vec3(a)), a) * uFade;
+      }`);
+    const loc = (pr, names) => { const o = {}; names.forEach(n => o[n] = gl.getUniformLocation(pr, n)); return o; };
+    return {
+      part, partU: loc(part, ['uMr', 'uLt', 'uCenter', 'uView', 'uRpx', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uAlpha', 'uOut']),
+      partA: { orb: gl.getAttribLocation(part, 'aOrb'), look: gl.getAttribLocation(part, 'aLook'), col: gl.getAttribLocation(part, 'aCol') },
+      bright, brightU: loc(bright, ['uSrc', 'uTexel', 'uThr']),
+      blur, blurU: loc(blur, ['uSrc', 'uDir']),
+      fin, finU: loc(fin, ['uScene', 'uBloom', 'uBloomK', 'uFade']),
+      targets: null,
+    };
+  }
+  function target(w, h) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fb, w, h };
+  }
+  function ensureTargets() {
+    const w = glc.width, h = glc.height;
+    if (SC.targets && SC.targets.w === w && SC.targets.h === h) return SC.targets;
+    if (SC.targets) for (const k of ['scene', 'a', 'b']) { gl.deleteTexture(SC.targets[k].tex); gl.deleteFramebuffer(SC.targets[k].fb); }
+    const qw = Math.max(1, Math.ceil(w / 4)), qh = Math.max(1, Math.ceil(h / 4));
+    return (SC.targets = { w, h, scene: target(w, h), a: target(qw, qh), b: target(qw, qh) });
+  }
+  function quadPass(prog, dst) {
+    gl.useProgram(prog);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null);
+    gl.viewport(0, 0, dst ? dst.w : glc.width, dst ? dst.h : glc.height);
+    gl.bindBuffer(gl.ARRAY_BUFFER, GLR.buf);
+    const a = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(a);
+    gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // particle layout per body: rings sampled from the real radial profile, then a loose sparkling debris disc
+  function buildGpuParticles(b, ringOuter) {
+    const data = [];
+    const push = (r, a, h, w, size, br, tw, c) => data.push(r, a, h, w, size, br, tw, 0, c[0] / 255, c[1] / 255, c[2] / 255);
+    const kepler = r => TAU / (b.p1 * Math.pow(r, 1.5));
+    const k = small ? 1 : 1.8;
+    if (b.rings) {
+      const ring = ringProfile(b);
+      const n = Math.round((b.id === 'saturn' ? 42000 : 2500) * k);
+      for (let i = 0; i < n; i++) {
+        let r, c;
+        for (let tries = 0; tries < 30; tries++) {
+          r = rnd(ring.rin, ring.rout);
+          if (b.id === 'saturn') { c = ringColor(r); }
+          else { c = [0, 0, 0, 0]; for (const [r0, r1, dens, cols] of b.rings) if (r >= r0 && r <= r1) c = [...hexRgb(pick(cols)), Math.min(1, dens * 2)]; }
+          if (Math.random() < c[3]) break;
+        }
+        const j = rnd(0.75, 1.25), flake = Math.random() < 0.03;
+        const col = flake ? [255, 252, 245] : [Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)];
+        push(r, rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.1, 0.3)) * (b.id === 'saturn' ? 1 : 0.8), -1, col);
+      }
+    }
+    if (!b.isSun) {
+      const cols = [hexRgb(b.col[0]), hexRgb(b.col[1]), [255, 255, 255], [255, 211, 107], [159, 216, 255], [127, 182, 255]];
+      const n = Math.round((b.rings ? 3500 : b.id === 'earth' ? 0 : 1800) * k);
+      const d0 = Math.max(1.45, ringOuter + 0.08);
+      for (let i = 0; i < n; i++) {
+        const r = d0 + Math.min(3, -Math.log(1 - Math.random() * 0.999) * 0.5), big = Math.random() < 0.06;
+        push(r, rnd(0, TAU), gauss() * 0.035 * r, kepler(r), big ? rnd(1.8, 3.2) : rnd(0.6, 1.4), big ? rnd(0.5, 0.9) : rnd(0.18, 0.55), rnd(0, TAU), pick(cols));
+      }
+    }
+    const arr = new Float32Array(data);
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    return { buf, n: arr.length / 11, day0: days, out: Math.max(ringOuter, 1) + 2.6 };
+  }
+
+  // draws the whole close-up body (planet, shaded rings, particles, bloom) into the WebGL canvas
+  function renderCloseGL(b, C, R, Mc, Lw, spin, t, A) {
+    if (!SC) SC = initScene();
+    const T = ensureTargets();
+    const Rpx = R * closeSc * DPR, cx = closeCx * DPR, cy = closeCy * DPR;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, T.scene.fb);
+    gl.viewport(0, 0, T.w, T.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    renderBodyGL(b, R, Mc, Lw, spin, DPR * closeSc, true, t, { cx, cy, Rpx, w: T.w, h: T.h });
+    if (C.gpu) {
+      const P = SC, U = P.partU, a = P.partA;
+      gl.useProgram(P.part);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      const Mr = mul(Mc, rotX(b.tiltAx * DEG)), Tm = rotX(b.tiltAx * DEG);
+      gl.uniformMatrix3fv(U.uMr, false, new Float32Array(tr(Mr)));
+      gl.uniform3f(U.uLt, Tm[0] * Lw[0] + Tm[3] * Lw[1] + Tm[6] * Lw[2], Tm[1] * Lw[0] + Tm[4] * Lw[1] + Tm[7] * Lw[2], Tm[2] * Lw[0] + Tm[5] * Lw[1] + Tm[8] * Lw[2]);
+      gl.uniform2f(U.uCenter, cx, cy);
+      gl.uniform2f(U.uView, T.w, T.h);
+      gl.uniform1f(U.uRpx, Rpx);
+      gl.uniform1f(U.uDpr, DPR * Math.sqrt(closeSc * cZoom));
+      gl.uniform1f(U.uDays, days - C.gpu.day0);
+      gl.uniform1f(U.uTime, t);
+      gl.uniform1f(U.uStreak, speed * 0.035);
+      gl.uniform1f(U.uAlpha, A);
+      gl.uniform1f(U.uOut, C.gpu.out);
+      gl.bindBuffer(gl.ARRAY_BUFFER, C.gpu.buf);
+      gl.enableVertexAttribArray(a.orb); gl.vertexAttribPointer(a.orb, 4, gl.FLOAT, false, 44, 0);
+      gl.enableVertexAttribArray(a.look); gl.vertexAttribPointer(a.look, 4, gl.FLOAT, false, 44, 16);
+      gl.enableVertexAttribArray(a.col); gl.vertexAttribPointer(a.col, 3, gl.FLOAT, false, 44, 32);
+      gl.drawArrays(gl.POINTS, 0, C.gpu.n);
+      gl.disableVertexAttribArray(a.look); gl.disableVertexAttribArray(a.col);
+      gl.disable(gl.BLEND);
+    }
+    // bloom: bright-pass at quarter resolution, two separable blur rounds, then add back
+    gl.activeTexture(gl.TEXTURE0);
+    gl.useProgram(SC.bright);
+    gl.uniform1i(SC.brightU.uSrc, 0); gl.uniform2f(SC.brightU.uTexel, 1 / T.w, 1 / T.h); gl.uniform1f(SC.brightU.uThr, 0.55);
+    gl.bindTexture(gl.TEXTURE_2D, T.scene.tex); quadPass(SC.bright, T.a);
+    gl.useProgram(SC.blur); gl.uniform1i(SC.blurU.uSrc, 0);
+    for (const sp of [1, 2.2]) {
+      gl.uniform2f(SC.blurU.uDir, sp / T.a.w, 0); gl.bindTexture(gl.TEXTURE_2D, T.a.tex); quadPass(SC.blur, T.b);
+      gl.uniform2f(SC.blurU.uDir, 0, sp / T.a.h); gl.bindTexture(gl.TEXTURE_2D, T.b.tex); quadPass(SC.blur, T.a);
+    }
+    gl.useProgram(SC.fin);
+    gl.uniform1i(SC.finU.uScene, 0); gl.uniform1i(SC.finU.uBloom, 1);
+    gl.uniform1f(SC.finU.uBloomK, b.isSun ? 0.8 : 0.95); gl.uniform1f(SC.finU.uFade, A);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, T.a.tex);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, T.scene.tex);
+    quadPass(SC.fin, null);
   }
 
   function makeTex(data, w, h, wrapS) {
@@ -681,16 +903,28 @@
   };
 
   // renders body `b` of screen radius R (css px) seen through camera matrix Mcam; returns the image half-size in radii
-  function renderBodyGL(b, R, Mcam, Lw, spin, pxScale, hi, t) {
+  function renderBodyGL(b, R, Mcam, Lw, spin, pxScale, hi, t, place) {
     const { U } = GLR;
     const T = rotX(b.tiltAx * DEG), TS = mul(T, rotY(spin)), M = mul(Mcam, TS), Mr = mul(Mcam, T);
     const ring = ringProfile(b);
     const ext = ring ? ring.rout * 1.02 : 1.12;
-    const px = clamp(Math.ceil(2 * ext * R * pxScale / 16) * 16, 16, 2048);
-    if (glc.width !== px) { glc.width = glc.height = px; }
-    gl.viewport(0, 0, px, px);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    let px = 0;
+    gl.useProgram(GLR.prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, GLR.buf);
+    gl.enableVertexAttribArray(GLR.aPos);
+    gl.vertexAttribPointer(GLR.aPos, 2, gl.FLOAT, false, 0, 0);
+    if (place) {
+      gl.uniform2f(U.uCenter, place.cx, place.cy); gl.uniform2f(U.uView, place.w, place.h); gl.uniform1f(U.uRpx, place.Rpx);
+    } else {
+      px = clamp(Math.ceil(2 * ext * R * pxScale / 16) * 16, 16, Math.min(glc.width, glc.height, 2048));
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, px, px);
+      gl.enable(gl.SCISSOR_TEST); gl.scissor(0, 0, px, px);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.disable(gl.BLEND);
+      gl.uniform2f(U.uCenter, px / 2, px / 2); gl.uniform2f(U.uView, px, px); gl.uniform1f(U.uRpx, px / (2 * ext));
+    }
     const tx = bodyTextures(b, hi);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tx.cloud || GLR.blank);
@@ -709,12 +943,13 @@
     gl.uniform1f(U.uHasRing, ring ? 1 : 0);
     gl.uniform1f(U.uRin, ring ? ring.rin : 0);
     gl.uniform1f(U.uRout, ring ? ring.rout : 1);
-    gl.uniform1f(U.uPix, 1 / Math.max(1, R * pxScale));
+    gl.uniform1f(U.uPix, 1 / Math.max(1, place ? place.Rpx : px / (2 * ext)));
     gl.uniform1f(U.uTime, t);
     gl.uniform1f(U.uCloudOff, (days * 0.013) % 1);
     gl.uniform1f(U.uExt, ext);
+    gl.uniform1f(U.uRingK, place ? 0.45 : 1);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    return ext;
+    return { ext, px };
   }
 
   function buildClose(b) {
@@ -750,13 +985,15 @@
     const a0 = Math.min(3, ...moons.map(m => m.a));
     moons.forEach(m => { m.rd = base + 0.65 * Math.log(m.a / a0); m.ph = rnd(0, TAU); });
     const maxRd = moons.length ? Math.max(...moons.map(m => m.rd)) : 0;
-    const fit = Math.max(ringOuter * 1.08, maxRd * 0.8, 1.8);
+    const fit = Math.max(ringOuter * 0.92, maxRd * 0.62, 1.7);
     // solar prominences
     const flares = b.isSun ? Array.from({ length: small ? 500 : 900 }, () => newFlare(true)) : [];
+    const gpu = GLR ? buildGpuParticles(b, ringOuter) : null;
+    if (gpu) parts.length = 0;
     const n = parts.length;
     const satl = b.id === 'earth' ? buildSatellites() : null;
     if (satl) Object.assign(satl, { px: new Float32Array(satl.n), py: new Float32Array(satl.n), pd: new Float32Array(satl.n), pa: new Float32Array(satl.n) });
-    b.close = { parts, moons, fit, flares, satl,
+    b.close = { parts, moons, fit, flares, satl, gpu,
       px: new Float32Array(n), py: new Float32Array(n), pd: new Float32Array(n), pa: new Float32Array(n) };
     return b.close;
   }
@@ -857,12 +1094,15 @@
 
   // close-up camera
   let sel = null, pendingSel, closeK = 0, closeTarget = 0;
-  let cYaw = 0, cTilt = 0.33, cZoom = 1, vcYaw = 0;
-  let closeR = 100, closeSc = 1;
+  let cYaw = 0, cTilt = 0.33, cZoom = 1, vcYaw = 0, cRoll = 0;
+  const closeCam = () => { const M = camM(cYaw, cTilt), c = Math.cos(cRoll), s = Math.sin(cRoll);
+    return [c * M[0] - s * M[3], c * M[1] - s * M[4], c * M[2] - s * M[5], s * M[0] + c * M[3], s * M[1] + c * M[4], s * M[2] + c * M[5], M[6], M[7], M[8]]; };
+  let closeR = 100, closeSc = 1, closeCx = 0, closeCy = 0;
 
   function closeSetup(b) {
     const C = buildClose(b);
     cTilt = b.isSun ? 0.2 : b.rings ? 0.12 : 0.3; cZoom = 1;
+    cRoll = b.rings && b.id !== 'uranus' ? -0.5 : 0;
     // turn the camera so sunlight comes from the left, a little toward the viewer, like the reference video
     const [x, , z] = planetPos(b);
     const L = Math.hypot(x, z) || 1, lx = -x / L, lz = -z / L;
@@ -873,7 +1113,7 @@
   function drawClose(b, A, dDays, t) {
     const C = b.close;
     const R = closeR * cZoom;
-    const Mc = camM(cYaw, cTilt);
+    const Mc = closeCam();
     const T = rotX(b.tiltAx * DEG);
     const spin = (TAU * days / b.rot) % TAU;
     // sunlight in world and in body coordinates
@@ -1011,10 +1251,11 @@
 
     // --- the body ---
     if (GLR) {
-      const ext = renderBodyGL(b, R, Mc, Lw, spin, DPR * closeSc, true, t);
-      ctx.globalAlpha = A;
-      ctx.drawImage(glc, -ext * R, -ext * R, 2 * ext * R, 2 * ext * R);
-      ctx.globalAlpha = 1;
+      renderCloseGL(b, C, R, Mc, Lw, spin, t, A);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(glc, 0, 0);
+      ctx.restore();
     } else {
       ctx.globalAlpha = A;
       sphere(0, 0, R, b.isSun ? ['#fffbe8', '#ffb347', '#e0601a'] : b.col, Ls[0], Ls[1]);
@@ -1206,6 +1447,7 @@
     fx += (tx - fx) * ease; fz += (tz - fz) * ease;
     zoom += (zoomTarget - zoom) * ease;
 
+    if (GLR && (glc.width !== cv.width || glc.height !== cv.height)) { glc.width = cv.width; glc.height = cv.height; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
@@ -1222,19 +1464,20 @@
       ctx.fillStyle = `rgba(2,3,9,${e.toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
       drawStars(e);
-      closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.3));
+      closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
       // the close-up grows out of the body's spot in the overview
       const s0 = clamp((sel.sr || 4) / closeR, 0.01, 1);
       const sc = lerp(s0, 1, e);
       closeSc = sc;
       const cxp = lerp(sel.sx, W / 2, e), cyp = lerp(sel.sy, H * 0.52, e);
+      closeCx = cxp; closeCy = cyp;
       ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * cxp, DPR * cyp);
       drawClose(sel, e, dDays, t);
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       if (sel.id === 'earth' && showNames && e > 0.9) {
         // James Webb Space Telescope at Sun–Earth L2, 1.5 million km straight away from the Sun
         const [x, , z] = planetPos(sel), l = Math.hypot(x, z);
-        const Mc = camM(cYaw, cTilt), k = 4.6 * closeR * cZoom * sc;
+        const Mc = closeCam(), k = 4.6 * closeR * cZoom * sc;
         const wx = x / l, wz = z / l;
         edgeMarker(cxp + (Mc[0] * wx + Mc[2] * wz) * k, cyp + (Mc[3] * wx + Mc[5] * wz) * k, 'УЭББ · L2, 1,5 МЛН КМ', '#ffd27a', e);
       }
