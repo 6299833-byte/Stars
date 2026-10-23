@@ -158,16 +158,49 @@
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = W * DPR; cv.height = H * DPR;
     small = Math.min(W, H) < 600;
-    const z = Math.min(W, H * 1.4) / 2 / 6.7;
+    const z = Math.min(W, H * 1.4) / 2 / 7.1;
     zoom = zoom0 ? zoom * z / zoom0 : z;
     zoomTarget = zoomTarget ? zoomTarget * z / zoom0 : z;
     zoom0 = z;
     resetStars();
   }
   const stars = [];
+  const bgCanvas = document.createElement('canvas');
   function resetStars() {
     stars.length = 0;
-    for (let i = 0; i < W * H / 1100; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.06 ? 1.4 : 0.7, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
+    for (let i = 0; i < W * H / 3500; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.15 ? 1.4 : 0.8, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
+    bgCanvas.width = W * DPR; bgCanvas.height = H * DPR;
+    const g = bgCanvas.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = '#020309'; g.fillRect(0, 0, W, H);
+    // a faint Milky Way band crossing the sky diagonally
+    const ang = -0.95, ca = Math.cos(ang), sa = Math.sin(ang), L = Math.hypot(W, H);
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 60; i++) {
+      const u = rnd(-0.5, 0.5) * L, v = gauss() * L * 0.06, x = W / 2 + u * ca - v * sa, y = H / 2 + u * sa + v * ca, r = rnd(30, 110);
+      const cg = g.createRadialGradient(x, y, 0, x, y, r);
+      cg.addColorStop(0, pick(['rgba(120,110,170,0.05)', 'rgba(90,120,190,0.05)', 'rgba(190,160,140,0.04)']));
+      cg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    }
+    for (let i = 0; i < W * H / 120; i++) {
+      const u = rnd(-0.5, 0.5) * L, v = gauss() * L * 0.05, x = W / 2 + u * ca - v * sa, y = H / 2 + u * sa + v * ca;
+      g.fillStyle = `rgba(220,225,255,${rnd(0.03, 0.22).toFixed(2)})`;
+      g.fillRect(x, y, 0.6, 0.6);
+    }
+    // ordinary stars in real star colours, a few bright ones with a soft glow
+    const SC_ = ['#9bb0ff', '#aabfff', '#cad7ff', '#f8f7ff', '#fff4ea', '#ffd2a1', '#ffcc6f'];
+    for (let i = 0; i < W * H / 900; i++) {
+      const x = Math.random() * W, y = Math.random() * H, c = pick(SC_), b = Math.pow(Math.random(), 3);
+      g.globalAlpha = 0.25 + 0.75 * b; g.fillStyle = c;
+      const s = 0.5 + b * 1.2; g.fillRect(x, y, s, s);
+      if (b > 0.85) {
+        const cg = g.createRadialGradient(x, y, 0, x, y, 6);
+        cg.addColorStop(0, c + '55'); cg.addColorStop(1, c + '00');
+        g.fillStyle = cg; g.beginPath(); g.arc(x, y, 6, 0, TAU); g.fill();
+      }
+    }
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   }
   addEventListener('resize', resize);
   resize();
@@ -180,26 +213,26 @@
   // rot: sidereal day in Earth days; tiltAx: axial tilt in degrees (over 90° means retrograde spin).
   // p1: orbital period at 1 planet radius in days, for Keplerian ring speeds.
   const PLANETS = [
-    { id: 'mercury', name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.2, col: ['#e6dfd6', '#a79d93', '#4a4440'],
+    { id: 'mercury', name: 'Меркурий', a: 0.387, L0: 252.25, n: 4.09233, r: 2.8, col: ['#e6dfd6', '#a79d93', '#4a4440'],
       rot: 58.646, tiltAx: 0.03, p1: 0.0705, halo: '190,180,170',
       facts: 'Диаметр 4 879 км · 0,39 а. е. · год 88 дней · сутки 58,6 земных · спутников нет',
       note: 'Самая маленькая планета. Солнечные сутки на ней длятся 176 земных дней, дольше её года.' },
-    { id: 'venus', name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 3.4, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
+    { id: 'venus', name: 'Венера', a: 0.723, L0: 181.98, n: 1.60213, r: 4.2, col: ['#fff2d2', '#e3be7c', '#7a5a2a'],
       rot: 243.02, tiltAx: 177.4, p1: 0.0602, halo: '255,220,150',
       facts: 'Диаметр 12 104 км · 0,72 а. е. · год 225 дней · сутки 243 земных, вращение обратное · спутников нет',
       note: 'Самая горячая планета: под плотными облаками около 465 °C.' },
-    { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 3.6, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
+    { id: 'earth', name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 4.4, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
       rot: 0.99727, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
       facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
       note: 'Единственная известная планета с жизнью. Вокруг летают станции МКС и Тяньгун, телескоп Хаббл и тысячи спутников; на ночной стороне горят города.',
       moons: [{ name: 'Луна', a: 60.3, P: 27.32, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
-    { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 2.8, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
+    { id: 'mars', name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 3.4, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
       rot: 1.02596, tiltAx: 25.19, p1: 0.0694, halo: '255,150,110',
       facts: 'Диаметр 6 779 км · 1,52 а. е. · год 687 дней · сутки 24 ч 37 мин · наклон оси 25,2° · 2 спутника',
       note: 'Здесь гора Олимп, высочайший вулкан Солнечной системы, около 22 км.',
       moons: [{ name: 'Фобос', a: 2.76, P: 0.319, size: 0.05, col: ['#d8c8b8', '#8a7868', '#2a2018'] },
               { name: 'Деймос', a: 6.92, P: 1.263, size: 0.04, col: ['#e0d0c0', '#9a8878', '#2a2018'] }] },
-    { id: 'jupiter', name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 8, col: ['#fff0dc', '#d9b38c', '#5e4026'],
+    { id: 'jupiter', name: 'Юпитер', a: 5.203, L0: 34.35, n: 0.08309, r: 10, col: ['#fff0dc', '#d9b38c', '#5e4026'],
       rot: 0.41354, tiltAx: 3.13, p1: 0.1235, halo: '255,210,160',
       rings: [[1.72, 1.81, 0.12, ['#8a6a50', '#a88a6a']], [1.4, 1.71, 0.05, ['#6a5040']]],
       facts: 'Диаметр 139 820 км · 5,2 а. е. · год 11,9 лет · сутки 9 ч 56 мин · 95 спутников',
@@ -208,7 +241,7 @@
               { name: 'Европа', a: 9.4, P: 3.551, size: 0.055, col: ['#ffffff', '#d9cbb0', '#4a4030'] },
               { name: 'Ганимед', a: 15.0, P: 7.155, size: 0.09, col: ['#e8e0d4', '#a89c8c', '#302820'] },
               { name: 'Каллисто', a: 26.3, P: 16.69, size: 0.085, col: ['#cfc4b8', '#7d6e60', '#241c16'] }] },
-    { id: 'saturn', name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 7, col: ['#fff6dc', '#e3c98f', '#6a5326'],
+    { id: 'saturn', name: 'Сатурн', a: 9.537, L0: 50.08, n: 0.03346, r: 8.5, col: ['#fff6dc', '#e3c98f', '#6a5326'],
       rot: 0.44401, tiltAx: 26.73, p1: 0.1747, halo: '255,225,160',
       // D, C, B, Cassini Division, A, F rings, in planet radii
       rings: [[1.11, 1.24, 0.08, ['#7a6a55']], [1.24, 1.53, 0.35, ['#9c8a6c', '#b8a582', '#8a7a62']],
@@ -222,7 +255,7 @@
               { name: 'Диона', a: 6.26, P: 2.737, size: 0.05, col: ['#ffffff', '#cfcfcf', '#3c3c3c'] },
               { name: 'Рея', a: 8.74, P: 4.518, size: 0.06, col: ['#ffffff', '#c8c4c0', '#3a3836'] },
               { name: 'Титан', a: 20.3, P: 15.945, size: 0.1, col: ['#ffe0a0', '#e0a64a', '#5a3a10'] }] },
-    { id: 'uranus', name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 5, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
+    { id: 'uranus', name: 'Уран', a: 19.19, L0: 314.06, n: 0.01173, r: 6.2, col: ['#e6ffff', '#8fdde6', '#1f5a66'],
       rot: 0.71833, tiltAx: 97.77, p1: 0.1235, halo: '160,240,245',
       rings: [[1.64, 1.645, 0.05, ['#8aa0a8']], [1.66, 1.665, 0.05, ['#8aa0a8']], [1.675, 1.68, 0.05, ['#8aa0a8']],
               [1.75, 1.755, 0.06, ['#9ab0b8']], [1.77, 1.775, 0.06, ['#9ab0b8']], [1.79, 1.795, 0.06, ['#9ab0b8']],
@@ -234,7 +267,7 @@
               { name: 'Умбриэль', a: 10.4, P: 4.144, size: 0.06, col: ['#d0d0d0', '#808080', '#282828'] },
               { name: 'Титания', a: 17.1, P: 8.706, size: 0.075, col: ['#ffffff', '#c4bcb4', '#3a3632'] },
               { name: 'Оберон', a: 22.8, P: 13.46, size: 0.075, col: ['#f0e8e0', '#a8a098', '#2e2a26'] }] },
-    { id: 'neptune', name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 5, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
+    { id: 'neptune', name: 'Нептун', a: 30.07, L0: 304.35, n: 0.00598, r: 6.2, col: ['#dce8ff', '#3d63e0', '#0d1a5a'],
       rot: 0.67125, tiltAx: 28.32, p1: 0.1084, halo: '110,150,255',
       rings: [[2.15, 2.16, 0.05, ['#7080a0']], [2.53, 2.545, 0.08, ['#8090b0', '#a0b0d0']]],
       facts: 'Диаметр 49 244 км · 30,1 а. е. · год 165 лет · сутки 16 ч 6 мин · наклон оси 28,3° · 16 спутников',
@@ -242,7 +275,7 @@
       moons: [{ name: 'Протей', a: 4.75, P: 1.122, size: 0.04, col: ['#d0d0d0', '#808080', '#282828'] },
               { name: 'Тритон', a: 14.3, P: -5.877, size: 0.1, col: ['#ffffff', '#d8c8c0', '#403430'], inc: 23 }] },
   ];
-  const SUN = { id: 'sun', name: 'Солнце', r: 15, rot: 25.38, tiltAx: 7.25, isSun: true,
+  const SUN = { id: 'sun', name: 'Солнце', r: 17, rot: 25.38, tiltAx: 7.25, isSun: true,
     facts: 'Диаметр 1 392 700 км · 99,86 % массы системы · поверхность ≈ 5 500 °C · экватор оборачивается за 25,4 суток',
     note: 'Звезда — жёлтый карлик возрастом 4,6 млрд лет. В него поместилось бы около 1,3 миллиона Земель.' };
   PLANETS.forEach(p => { p.d = dist(p.a); p.sx = p.sy = -999; p.sr = 0; });
@@ -379,8 +412,115 @@
     }
   }
 
+  // glowing trail along each orbit, brightest just behind the planet
+  function drawOrbitTrails() {
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
+    const N = 140;
+    for (const p of PLANETS) {
+      const c = hexRgb(p.col[1]), Lp = (p.L0 + p.n * days) * DEG;
+      let prev = project(p.d * Math.cos(Lp), 0, -p.d * Math.sin(Lp));
+      for (let i = 1; i <= N; i++) {
+        const L = Lp - i / N * TAU, cur = project(p.d * Math.cos(L), 0, -p.d * Math.sin(L));
+        const k = Math.exp(-(i / N * TAU) / 1.1);
+        const a = (p === focus ? 0.14 : 0.06) + 0.34 * k;
+        ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
+        ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(cur[0], cur[1]); ctx.stroke();
+        prev = cur;
+      }
+    }
+  }
+
+  // asteroid belt with the Kirkwood gaps, Jupiter's Trojans at L4/L5, and the Kuiper belt with its plutino clump
+  function buildBeltGpu() {
+    const data = [], k = small ? 1 : 1.8;
+    const push = (a, L0, y, nDeg, size, br, tw, c) => data.push(dist(a) + gauss() * 0.012, L0, y, nDeg * DEG, size, br, tw, 0, c[0] / 255, c[1] / 255, c[2] / 255);
+    const AST = [[190, 170, 140], [150, 135, 115], [220, 200, 160], [125, 112, 100]], ICE = [[160, 180, 225], [130, 150, 195], [205, 218, 248]];
+    const gaps = [2.502, 2.825, 2.958, 3.279];
+    for (let i = 0; i < 9000 * k; i++) {
+      let a;
+      do a = 2.06 + Math.pow(Math.random(), 0.9) * 1.25; while (gaps.some(g => Math.abs(a - g) < 0.018) && Math.random() < 0.9);
+      const spark = Math.random() < 0.03;
+      push(a, rnd(0, TAU), gauss() * 0.035, 0.98561 / Math.pow(a, 1.5), spark ? rnd(1.3, 2) : rnd(0.5, 1.1), spark ? 0.6 : rnd(0.09, 0.26), spark ? rnd(0, TAU) : -1, spark ? [255, 232, 190] : pick(AST));
+    }
+    const jup = PLANETS.find(o => o.id === 'jupiter');
+    for (let i = 0; i < 1200 * k; i++) {
+      const lead = Math.random() < 0.5 ? 60 : -60;
+      // clouds 60° ahead of and behind Jupiter's current position, wide and faint like the real swarms
+      push(5.2 + gauss() * 0.9, (jup.L0 + jup.n * days + lead + gauss() * 16) * DEG, gauss() * 0.12, jup.n, rnd(0.5, 1.1), rnd(0.08, 0.22), -1, pick(AST));
+    }
+    for (let i = 0; i < 9000 * k; i++) {
+      const r = Math.random();
+      const a = r < 0.25 ? 39.4 + gauss() * 0.6 : r < 0.85 ? rnd(42, 48) : 48 + Math.pow(Math.random(), 2) * 50;
+      const spark = Math.random() < 0.02;
+      push(a, rnd(0, TAU), gauss() * (a > 48 ? 0.35 : 0.13), 0.98561 / Math.pow(a, 1.5), spark ? rnd(1.3, 2) : rnd(0.5, 1.1), spark ? 0.7 : rnd(0.14, 0.4), spark ? rnd(0, TAU) : -1, pick(ICE));
+    }
+    const arr = new Float32Array(data), buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+    return { buf, n: arr.length / 11, day0: days };
+  }
+
+  function renderOverviewGL(t) {
+    if (!SC) SC = initScene();
+    if (!SC.beltData) SC.beltData = buildBeltGpu();
+    const T = ensureTargets();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, T.scene.fb);
+    gl.viewport(0, 0, T.w, T.h);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    // belts
+    const B = SC.beltData, U = SC.beltU, a = SC.beltA;
+    gl.useProgram(SC.belt);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.uniformMatrix3fv(U.uM, false, new Float32Array(tr(M_ov)));
+    gl.uniform2f(U.uF, fx, fz);
+    gl.uniform2f(U.uHalf, W / 2, H / 2);
+    gl.uniform2f(U.uView, T.w, T.h);
+    gl.uniform1f(U.uZoom, zoom);
+    gl.uniform1f(U.uDpr, DPR);
+    gl.uniform1f(U.uSizeK, Math.min(2.2, Math.sqrt(zoom / zoom0)));
+    gl.uniform1f(U.uDays, days - B.day0);
+    gl.uniform1f(U.uTime, t);
+    gl.uniform1f(U.uStreak, speed * 0.035);
+    gl.bindBuffer(gl.ARRAY_BUFFER, B.buf);
+    gl.enableVertexAttribArray(a.orb); gl.vertexAttribPointer(a.orb, 4, gl.FLOAT, false, 44, 0);
+    gl.enableVertexAttribArray(a.look); gl.vertexAttribPointer(a.look, 4, gl.FLOAT, false, 44, 16);
+    gl.enableVertexAttribArray(a.col); gl.vertexAttribPointer(a.col, 3, gl.FLOAT, false, 44, 32);
+    gl.drawArrays(gl.POINTS, 0, B.n);
+    gl.disableVertexAttribArray(a.look); gl.disableVertexAttribArray(a.col);
+    // Sun and planets, farthest first
+    const bodies = [SUN, ...PLANETS].map(o => {
+      const [x, y, z] = planetPos(o), sp = project(x, y, z);
+      return { o, sp };
+    }).sort((p, q) => p.sp[2] - q.sp[2]);
+    for (const { o, sp } of bodies) {
+      const pr = o.r * sizeK() * sp[3];
+      o.sx = sp[0]; o.sy = sp[1]; o.sr = pr;
+      const [wx, , wz] = planetPos(o), wl = Math.hypot(wx, wz) || 1;
+      const Lw = o.isSun ? [0, 0, 1] : [-wx / wl, 0, -wz / wl];
+      renderBodyGL(o, pr, M_ov, Lw, (TAU * days / o.rot) % TAU, DPR, false, t, { cx: sp[0] * DPR, cy: sp[1] * DPR, Rpx: pr * DPR, w: T.w, h: T.h, over: true });
+    }
+    gl.disable(gl.BLEND);
+    bloomAndCompose(0.5, 1.0, 1);
+  }
+
   function drawOverview(dDays) {
     M_ov = camM(yaw, tilt);
+    if (GLR) {
+      drawOrbitTrails();
+      // soft corona under the GPU image
+      const [x, y, , k] = project(0, 0, 0), r = SUN.r * sizeK() * k;
+      ctx.globalCompositeOperation = 'lighter';
+      const halo = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 7);
+      halo.addColorStop(0, 'rgba(255,180,90,0.35)'); halo.addColorStop(0.35, 'rgba(255,120,40,0.08)'); halo.addColorStop(1, 'rgba(255,100,30,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 7, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      renderOverviewGL(t);
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(glc, 0, 0); ctx.restore();
+      if (showNames) { drawNamesOverview(); drawProbes(); }
+      return;
+    }
     drawOrbits();
     ctx.globalCompositeOperation = 'lighter';
     drawDust(kuiper, dDays);
@@ -597,6 +737,18 @@
   // =====================================================================
   const tr = M => [M[0], M[3], M[6], M[1], M[4], M[7], M[2], M[5], M[8]];
   let SC = null;
+  const PART_FS = `
+      precision mediump float;
+      varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
+      void main() {
+        vec2 q = (gl_PointCoord - 0.5) * vSize;
+        float al = dot(q, vDir), ac = dot(q, vec2(-vDir.y, vDir.x));
+        float e = al * al / (vLen * vLen * 0.25 + 0.01) + ac * ac / (vWid * vWid * 0.25 + 0.01);
+        float k = exp(-e * 2.2);
+        if (k < 0.01) discard;
+        vec3 c = vCol * k;
+        gl_FragColor = vec4(c, max(c.r, max(c.g, c.b)));
+      }`;
   function initScene() {
     const link = (vs, fs) => {
       const pr = gl.createProgram();
@@ -631,18 +783,29 @@
         gl_PointSize = vSize;
         vCol = aCol * aLook.y * tw * vis * uAlpha;
         vDir = dir; vLen = len; vWid = wid;
-      }`, `
-      precision mediump float;
+      }`, PART_FS);
+    const belt = link(`
+      attribute vec4 aOrb;   // compressed distance, start longitude, height, angular speed (rad/day)
+      attribute vec4 aLook; attribute vec3 aCol;
+      uniform mat3 uM; uniform vec2 uF, uHalf, uView;
+      uniform float uZoom, uDpr, uDays, uTime, uStreak, uSizeK;
       varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
       void main() {
-        vec2 q = (gl_PointCoord - 0.5) * vSize;
-        float al = dot(q, vDir), ac = dot(q, vec2(-vDir.y, vDir.x));
-        float e = al * al / (vLen * vLen * 0.25 + 0.01) + ac * ac / (vWid * vWid * 0.25 + 0.01);
-        float k = exp(-e * 2.2);
-        if (k < 0.01) discard;
-        vec3 c = vCol * k;
-        gl_FragColor = vec4(c, max(c.r, max(c.g, c.b)));
-      }`);
+        float L = aOrb.y + aOrb.w * uDays, d = aOrb.x;
+        vec3 c = uM * vec3(d * cos(L) - uF.x, aOrb.z, -d * sin(L) - uF.y);
+        float k = 22.0 / (22.0 - c.z * 0.6);
+        vec2 pos = (uHalf + c.xy * uZoom * k) * uDpr;
+        vec3 tc = uM * vec3(-sin(L), 0.0, -cos(L));
+        float dl = length(tc.xy);
+        vec2 dir = dl > 1e-4 ? tc.xy / dl : vec2(1.0, 0.0);
+        float wid = aLook.x * uDpr * uSizeK;
+        float len = wid * 1.6 + min(aOrb.w * d * uZoom * uDpr * uStreak * dl, 14.0 * uDpr);
+        vSize = len + 2.0;
+        gl_PointSize = vSize;
+        gl_Position = vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0);
+        float tw = aLook.z >= 0.0 ? 0.55 + 0.45 * sin(uTime * 2.0 + aLook.z) : 1.0;
+        vCol = aCol * aLook.y * tw; vDir = dir; vLen = len; vWid = wid;
+      }`, PART_FS);
     const QV = `attribute vec2 aPos; varying vec2 vUv; void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
     const bright = link(QV, `
       precision mediump float; varying vec2 vUv; uniform sampler2D uSrc; uniform vec2 uTexel; uniform float uThr;
@@ -672,6 +835,8 @@
     return {
       part, partU: loc(part, ['uMr', 'uLt', 'uCenter', 'uView', 'uRpx', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uAlpha', 'uOut']),
       partA: { orb: gl.getAttribLocation(part, 'aOrb'), look: gl.getAttribLocation(part, 'aLook'), col: gl.getAttribLocation(part, 'aCol') },
+      belt, beltU: loc(belt, ['uM', 'uF', 'uHalf', 'uView', 'uZoom', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uSizeK']),
+      beltA: { orb: gl.getAttribLocation(belt, 'aOrb'), look: gl.getAttribLocation(belt, 'aLook'), col: gl.getAttribLocation(belt, 'aCol') },
       bright, brightU: loc(bright, ['uSrc', 'uTexel', 'uThr']),
       blur, blurU: loc(blur, ['uSrc', 'uDir']),
       fin, finU: loc(fin, ['uScene', 'uBloom', 'uBloomK', 'uFade']),
@@ -784,10 +949,15 @@
       gl.disableVertexAttribArray(a.look); gl.disableVertexAttribArray(a.col);
       gl.disable(gl.BLEND);
     }
-    // bloom: bright-pass at quarter resolution, two separable blur rounds, then add back
+    bloomAndCompose(0.55, b.isSun ? 0.8 : 0.95, A);
+  }
+
+  // bloom: bright-pass at quarter resolution, two separable blur rounds, then add back onto the scene
+  function bloomAndCompose(thr, k, fade) {
+    const T = SC.targets;
     gl.activeTexture(gl.TEXTURE0);
     gl.useProgram(SC.bright);
-    gl.uniform1i(SC.brightU.uSrc, 0); gl.uniform2f(SC.brightU.uTexel, 1 / T.w, 1 / T.h); gl.uniform1f(SC.brightU.uThr, 0.55);
+    gl.uniform1i(SC.brightU.uSrc, 0); gl.uniform2f(SC.brightU.uTexel, 1 / T.w, 1 / T.h); gl.uniform1f(SC.brightU.uThr, thr);
     gl.bindTexture(gl.TEXTURE_2D, T.scene.tex); quadPass(SC.bright, T.a);
     gl.useProgram(SC.blur); gl.uniform1i(SC.blurU.uSrc, 0);
     for (const sp of [1, 2.2]) {
@@ -796,7 +966,7 @@
     }
     gl.useProgram(SC.fin);
     gl.uniform1i(SC.finU.uScene, 0); gl.uniform1i(SC.finU.uBloom, 1);
-    gl.uniform1f(SC.finU.uBloomK, b.isSun ? 0.8 : 0.95); gl.uniform1f(SC.finU.uFade, A);
+    gl.uniform1f(SC.finU.uBloomK, k); gl.uniform1f(SC.finU.uFade, fade);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, T.a.tex);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, T.scene.tex);
     quadPass(SC.fin, null);
@@ -914,6 +1084,7 @@
     gl.enableVertexAttribArray(GLR.aPos);
     gl.vertexAttribPointer(GLR.aPos, 2, gl.FLOAT, false, 0, 0);
     if (place) {
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform2f(U.uCenter, place.cx, place.cy); gl.uniform2f(U.uView, place.w, place.h); gl.uniform1f(U.uRpx, place.Rpx);
     } else {
       px = clamp(Math.ceil(2 * ext * R * pxScale / 16) * 16, 16, Math.min(glc.width, glc.height, 2048));
@@ -947,7 +1118,7 @@
     gl.uniform1f(U.uTime, t);
     gl.uniform1f(U.uCloudOff, (days * 0.013) % 1);
     gl.uniform1f(U.uExt, ext);
-    gl.uniform1f(U.uRingK, place ? 0.45 : 1);
+    gl.uniform1f(U.uRingK, place && !place.over ? 0.45 : 1);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return { ext, px };
   }
@@ -1451,8 +1622,7 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#020309';
-    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(bgCanvas, 0, 0, W, H);
     const drawStars = a => {
       for (const s of stars) {
         ctx.fillStyle = `rgba(215,225,255,${((0.3 + 0.5 * Math.abs(Math.sin(t * s.sp + s.tw))) * a).toFixed(3)})`;
@@ -1461,8 +1631,7 @@
     };
     if (closeK < 1) { drawStars(1); drawOverview(closeK > 0 ? 0 : dDays); }
     if (closeK > 0 && sel) {
-      ctx.fillStyle = `rgba(2,3,9,${e.toFixed(3)})`;
-      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = e; ctx.drawImage(bgCanvas, 0, 0, W, H); ctx.globalAlpha = 1;
       drawStars(e);
       closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
       // the close-up grows out of the body's spot in the overview
