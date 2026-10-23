@@ -9,3 +9,4 @@ android/project/.gradle/
 android/project/local.properties
 *.keystore
 *.jks
+*.zip
