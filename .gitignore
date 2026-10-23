@@ -10,3 +10,5 @@ android/project/local.properties
 *.keystore
 *.jks
 *.zip
+__pycache__/
+*.pyc
