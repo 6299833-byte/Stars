@@ -449,7 +449,7 @@
   }
 
   // ---------- overview camera ----------
-  let yaw = 0, tilt = 0.95, vYaw = 0;
+  let yaw = 0, tilt = 0.95, vYaw = 0, tiltTarget = null;
   let focus = null, fx = 0, fz = 0;
   let M_ov = camM(yaw, tilt);
   function project(x, y, z) {
@@ -663,10 +663,86 @@
     bloomAndCompose(0.5, 1.0, 1);
   }
 
+  // ---------- beyond the planets: heliosphere, Oort cloud, nearest stars ----------
+  // All on the same compressed log scale as the planets (dist()). Directions are ecliptic longitude/latitude.
+  const eclDir = (lon, lat) => [Math.cos(lat * DEG) * Math.cos(lon * DEG), Math.sin(lat * DEG), -Math.cos(lat * DEG) * Math.sin(lon * DEG)];
+  const atAU = (v, au) => { const d = dist(au); return [v[0] * d, v[1] * d, v[2] * d]; };
+  const NOSE = eclDir(255, 5);   // interstellar wind comes from here; the heliosphere's tail points the other way
+  const FAR = {
+    id: 'far', name: 'За пределами Солнечной системы', isFar: true,
+    facts: 'Гелиопауза ≈ 120 а. е. · облако Оорта ≈ 2 000–100 000 а. е. · Проксима Центавра 4,24 св. года · масштаб логарифмический',
+    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — а за ним ближайшие звёзды.',
+  };
+  const heliRadius = cosTheta => 120 * Math.pow(1 + 1.1 * (1 - cosTheta), 1.5);   // nose 120 AU, flanks ~180, tail ~400+
+  const helio = [], oort = [];
+  for (let i = 0; i < (small ? 1800 : 3000); i++) {
+    const u = rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u), v = [q * Math.cos(ph), u, q * Math.sin(ph)];
+    const ct = v[0] * NOSE[0] + v[1] * NOSE[1] + v[2] * NOSE[2];
+    const shock = Math.random() < 0.3;                 // termination shock inside the heliopause
+    const au = shock ? heliRadius(ct) * 0.75 : heliRadius(ct) * rnd(0.97, 1.05);
+    helio.push({ p: atAU(v, au), c: shock ? '#ffd09a' : (ct > 0.3 ? '#9fd8ff' : '#7f9cff'), o: shock ? rnd(0.15, 0.35) : rnd(0.3, 0.7) * (0.6 + 0.4 * Math.max(ct, 0)), s: 1.4 });
+  }
+  // the IBEX ribbon: a bright band of neutral atoms across the nose
+  const RIB = eclDir(221, 39);
+  for (let i = 0; i < 700; i++) {
+    const a = rnd(0, TAU), axis = RIB, t1 = [axis[2], 0, -axis[0]], n1 = Math.hypot(...t1);
+    const e1 = t1.map(x => x / n1), e2 = [axis[1] * e1[2] - axis[2] * e1[1], axis[2] * e1[0] - axis[0] * e1[2], axis[0] * e1[1] - axis[1] * e1[0]];
+    const r0 = Math.sin(74 * DEG), z0 = Math.cos(74 * DEG);
+    const v = [0, 1, 2].map(k => axis[k] * z0 + (e1[k] * Math.cos(a) + e2[k] * Math.sin(a)) * r0);
+    const ct = v[0] * NOSE[0] + v[1] * NOSE[1] + v[2] * NOSE[2];
+    if (ct < 0.1) continue;
+    helio.push({ p: atAU(v, heliRadius(ct) * 1.01), c: '#c8f0ff', o: rnd(0.5, 0.9), s: 1.6 });
+  }
+  for (let i = 0; i < (small ? 2600 : 4500); i++) {
+    const inner = Math.random() < 0.35;                // Hills cloud: flattened toward the ecliptic
+    const au = inner ? 2000 + Math.pow(Math.random(), 0.8) * 18000 : 20000 + Math.pow(Math.random(), 0.7) * 80000;
+    const u = inner ? clamp(gauss() * 0.35, -1, 1) : rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u);
+    oort.push({ p: atAU([q * Math.cos(ph), u, q * Math.sin(ph)], au), c: pick(['#cfe0ff', '#a8c0f0', '#e8f0ff', '#9fb8e8']), o: rnd(0.35, 0.85), s: Math.random() < 0.08 ? 2 : 1.3 });
+  }
+  const NEAR_STARS = [   // ecliptic coordinates (approximate), distance in light years
+    { name: 'Альфа Центавра (A, B и Проксима)', lon: 239.5, lat: -42.6, ly: 4.24, col: '#fff1d0', r: 3.8, note: '4,2–4,4' },
+    { name: 'Звезда Барнарда', lon: 269.5, lat: 27.9, ly: 5.96, col: '#ff7a4a', r: 2.2 },
+    { name: 'Сириус', lon: 104.1, lat: -39.6, ly: 8.6, col: '#cfe2ff', r: 4.2 },
+  ].map(o => ({ ...o, p: atAU(eclDir(o.lon, o.lat), o.ly * 63241) }));
+
+  const farK = () => clamp((0.95 - zoom / zoom0) / 0.45, 0, 1);   // 0 near the planets, 1 when pulled far back
+  function drawBeyond(taken) {
+    const fk = farK();
+    if (fk <= 0) return;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const list of [helio, oort]) for (const q of list) {
+      const [x, y] = project(...q.p);
+      if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
+      ctx.globalAlpha = q.o * fk; ctx.fillStyle = q.c; const sz = q.s || 1.1; ctx.fillRect(x, y, sz, sz);
+    }
+    for (const st of NEAR_STARS) {
+      const [x, y] = project(...st.p), r = st.r * (0.8 + 0.4 * fk);
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+      g.addColorStop(0, st.col); g.addColorStop(0.25, st.col + '88'); g.addColorStop(1, st.col + '00');
+      ctx.globalAlpha = fk; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, TAU); ctx.fill();
+      st.sx = x; st.sy = y;
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (!namesOn() || fk < 0.5) return;
+    ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace'; ctx.textBaseline = 'middle';
+    const label = (txt, x, y, col) => {
+      const w = ctx.measureText(txt).width;
+      if (x + w > W - 6) x = W - 6 - w;
+      if (x < 6 || y < 12 || y > H - 12 || (taken && taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 12))) return;
+      taken && taken.push([x, y, w]);
+      ctx.globalAlpha = fk; ctx.fillStyle = col; ctx.fillText(txt, x, y); ctx.globalAlpha = 1;
+    };
+    for (const st of NEAR_STARS) label(`${st.name.toUpperCase()} · ${st.note || String(st.ly).replace('.', ',')} СВ. ГОДА`, st.sx + 8, st.sy, 'rgba(255,230,200,0.85)');
+    const [hx, hy] = project(...atAU(NOSE, 125)); label('ГЕЛИОПАУЗА · ≈120 А. Е.', hx + 6, hy, 'rgba(170,215,255,0.85)');
+    const [ox, oy] = project(...atAU(eclDir(150, 50), 60000)); label('ОБЛАКО ООРТА', ox, oy, 'rgba(200,215,245,0.75)');
+  }
+
   function drawOverview(dDays) {
     M_ov = camM(yaw, tilt);
     updateSmall();
     if (GLR) {
+      const fk = farK();
+      if (fk > 0) { ctx.fillStyle = `rgba(2,3,9,${(0.55 * fk).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
       drawOrbitTrails();
       if (showSmall) { drawSmallOrbits(); drawStreams(); }
       // soft corona under the GPU image
@@ -679,7 +755,9 @@
       renderOverviewGL(t);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(glc, 0, 0); ctx.restore();
       if (showSmall) drawSmallBodies();
-      if (namesOn()) { const taken = drawNamesOverview(); if (namesAll()) { drawProbes(taken); if (showSmall) drawSmallLabels(taken); } }
+      const taken = namesOn() && farK() < 0.5 ? drawNamesOverview() : [];
+      drawBeyond(taken);
+      if (namesAll()) { drawProbes(taken); if (showSmall) drawSmallLabels(taken); }
       return;
     }
     drawOrbits();
@@ -2047,6 +2125,7 @@
   addChip(null, 'Обзор');
   addChip(SUN, 'Солнце', 'radial-gradient(circle at 35% 35%,#fffbe8,#ffb347 55%,#e0601a)');
   PLANETS.forEach(p => addChip(p, p.name, `radial-gradient(circle at 35% 35%,${p.col[0]},${p.col[1]} 55%,${p.col[2]})`));
+  addChip(FAR, 'За пределами', 'radial-gradient(circle,#c8f0ff,#7f9cff 55%,rgba(60,80,160,0))');
 
   let speedBeforeClose = null;
   const speedBtns = [...document.querySelectorAll('[data-speed]')];
@@ -2121,6 +2200,14 @@
     showInfo(b);
   }
   function choose(b) {
+    if (b && b.isFar) {   // pull far back from the planets
+      closeTarget = 0; pendingSel = undefined; focus = null;
+      if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
+      zoomTarget = zoom0 * 0.27; tiltTarget = 0.5;
+      showInfo(b);
+      hint.textContent = 'ЩИПОК — ПРИБЛИЗИТЬ · «ОБЗОР» — ВЕРНУТЬСЯ К ПЛАНЕТАМ';
+      return;
+    }
     if (b && b.kind) {
       closeTarget = 0; pendingSel = undefined;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
@@ -2131,7 +2218,7 @@
     }
     if (b === sel && closeTarget === 1) return;
     if (!b) {
-      closeTarget = 0; pendingSel = undefined; focus = null; zoomTarget = zoom0;
+      closeTarget = 0; pendingSel = undefined; focus = null; zoomTarget = zoom0; tiltTarget = 0.95;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
       showInfo(null);
       return;
@@ -2162,7 +2249,7 @@
     } else if (pts.size === 2 && pinch0) {
       const [a, b] = [...pts.values()], k = Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d;
       if (inClose) cZoom = clamp(pinch0.cz * k, 0.35, 3.5);
-      else zoom = zoomTarget = clamp(pinch0.z * k, zoom0 * 0.6, zoom0 * 14);
+      else zoom = zoomTarget = clamp(pinch0.z * k, zoom0 * 0.25, zoom0 * 14);
     }
   });
   cv.addEventListener('pointerup', e => {
@@ -2185,7 +2272,7 @@
     e.preventDefault();
     const k = Math.exp(-e.deltaY * 0.0015);
     if (closeTarget === 1) cZoom = clamp(cZoom * k, 0.35, 3.5);
-    else zoom = zoomTarget = clamp(zoom * k, zoom0 * 0.6, zoom0 * 14);
+    else zoom = zoomTarget = clamp(zoom * k, zoom0 * 0.25, zoom0 * 14);
   }, { passive: false });
 
   // high-resolution maps are built in the background, most-visited bodies first
@@ -2217,6 +2304,7 @@
     const ease = Math.min(1, dt * 4);
     fx += (tx - fx) * ease; fz += (tz - fz) * ease;
     zoom += (zoomTarget - zoom) * ease;
+    if (tiltTarget !== null) { tilt += (tiltTarget - tilt) * ease; if (Math.abs(tiltTarget - tilt) < 0.002 || pts.size) tiltTarget = null; }
 
     if (GLR && (glc.width !== cv.width || glc.height !== cv.height)) { glc.width = cv.width; glc.height = cv.height; }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
