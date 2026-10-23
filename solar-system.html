@@ -450,12 +450,12 @@
 
   // ---------- overview camera ----------
   let yaw = 0, tilt = 0.95, vYaw = 0, tiltTarget = null;
-  let focus = null, fx = 0, fz = 0;
+  let focus = null, fx = 0, fy = 0, fz = 0, persp = 22;   // persp: camera distance; weaker perspective when pulled far back
   let M_ov = camM(yaw, tilt);
   function project(x, y, z) {
-    const dx = x - fx, dz = z - fz, M = M_ov;
-    const a = M[0] * dx + M[1] * y + M[2] * dz, b = M[3] * dx + M[4] * y + M[5] * dz, depth = M[6] * dx + M[7] * y + M[8] * dz;
-    const k = 22 / (22 - depth * 0.6);
+    const dx = x - fx, dy = y - fy, dz = z - fz, M = M_ov;
+    const a = M[0] * dx + M[1] * dy + M[2] * dz, b = M[3] * dx + M[4] * dy + M[5] * dz, depth = M[6] * dx + M[7] * dy + M[8] * dz;
+    const k = persp / Math.max(persp * 0.3, persp - depth * 0.6);   // clamp so far-off points never flip through the camera
     return [W / 2 + a * zoom * k, H / 2 + b * zoom * k, depth, k];
   }
   const sizeK = () => Math.pow(zoom / zoom0, 0.7);
@@ -632,7 +632,8 @@
     gl.useProgram(SC.belt);
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.uniformMatrix3fv(U.uM, false, new Float32Array(tr(M_ov)));
-    gl.uniform2f(U.uF, fx, fz);
+    gl.uniform3f(U.uF, fx, fy, fz);
+    gl.uniform1f(U.uPersp, persp);
     gl.uniform2f(U.uHalf, W / 2, H / 2);
     gl.uniform2f(U.uView, T.w, T.h);
     gl.uniform1f(U.uZoom, zoom);
@@ -671,7 +672,7 @@
   const FAR = {
     id: 'far', name: 'За пределами Солнечной системы', isFar: true,
     facts: 'Гелиопауза ≈ 120 а. е. · облако Оорта ≈ 2 000–100 000 а. е. · Проксима Центавра 4,24 св. года · масштаб логарифмический',
-    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — а за ним ближайшие звёзды.',
+    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — а за ним ближайшие звёзды. Нажми на звезду, чтобы подлететь к её планетной системе.',
   };
   const heliRadius = cosTheta => 120 * Math.pow(1 + 1.1 * (1 - cosTheta), 1.5);   // nose 120 AU, flanks ~180, tail ~400+
   const helio = [], oort = [];
@@ -699,13 +700,56 @@
     const u = inner ? clamp(gauss() * 0.35, -1, 1) : rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u);
     oort.push({ p: atAU([q * Math.cos(ph), u, q * Math.sin(ph)], au), c: pick(['#cfe0ff', '#a8c0f0', '#e8f0ff', '#9fb8e8']), o: rnd(0.35, 0.85), s: Math.random() < 0.08 ? 2 : 1.3 });
   }
-  const NEAR_STARS = [   // ecliptic coordinates (approximate), distance in light years
-    { name: 'Альфа Центавра (A, B и Проксима)', lon: 239.5, lat: -42.6, ly: 4.24, col: '#fff1d0', r: 3.8, note: '4,2–4,4' },
-    { name: 'Звезда Барнарда', lon: 269.5, lat: 27.9, ly: 5.96, col: '#ff7a4a', r: 2.2 },
-    { name: 'Сириус', lon: 104.1, lat: -39.6, ly: 8.6, col: '#cfe2ff', r: 4.2 },
-  ].map(o => ({ ...o, p: atAU(eclDir(o.lon, o.lat), o.ly * 63241) }));
+  // Neighbouring star systems with their known planets (NASA Exoplanet Archive, from memory; check before citing).
+  // ra in hours, dec in degrees (J2000), ly = distance; planets: period in days (display orbits are not to scale).
+  const raDec = (raH, decD) => {   // equatorial -> ecliptic direction on this page's axes
+    const a = raH * 15 * DEG, d = decD * DEG, e = 23.4393 * DEG;
+    const x = Math.cos(d) * Math.cos(a), y = Math.cos(d) * Math.sin(a), z = Math.sin(d);
+    const ye = y * Math.cos(e) + z * Math.sin(e), ze = -y * Math.sin(e) + z * Math.cos(e);
+    return [x, ze, -ye];
+  };
+  const STAR_SYSTEMS = [
+    { id: 'alphacen', name: 'Альфа Центавра', ra: 14.66, dec: -60.83, ly: 4.37, col: '#fff1d0', r: 3.8, comp: [{ col: '#ffd59a', sep: 9 }, { col: '#ff8a5c', sep: 26, small: true }],
+      planets: [{ name: 'Проксима b', P: 11.19 }, { name: 'Проксима d', P: 5.12 }],
+      facts: 'Ближайшая звёздная система · 4,24–4,37 св. года · Альфа Центавра A (жёлтая, как Солнце), B (оранжевая) и красный карлик Проксима',
+      note: 'У Проксимы две подтверждённые планеты; Проксима b земной массы лежит в зоне, где возможна жидкая вода. У Альфы Центавра A телескоп «Уэбб» в 2025 году заметил кандидата в газовые гиганты.' },
+    { id: 'barnard', name: 'Звезда Барнарда', ra: 17.963, dec: 4.69, ly: 5.96, col: '#ff7a4a', r: 2.4,
+      planets: [{ name: 'b', P: 3.15 }, { name: 'c', P: 4.12 }, { name: 'd', P: 2.34 }, { name: 'e', P: 6.74 }],
+      facts: 'Красный карлик · 5,96 св. года · самая быстрая звезда на нашем небе',
+      note: 'В 2024–2025 годах у неё подтвердили четыре маленькие планеты легче Земли; все ближе к звезде, чем Меркурий к Солнцу.' },
+    { id: 'wolf359', name: 'Вольф 359', ra: 10.94, dec: 7.01, ly: 7.86, col: '#ff6a40', r: 2.0, planets: [{ name: 'кандидат', P: 2.69, cand: true }],
+      facts: 'Красный карлик · 7,86 св. года · одна из самых тусклых известных звёзд',
+      note: 'Есть кандидаты в планеты, но они пока не подтверждены.' },
+    { id: 'lalande', name: 'Лаланд 21185', ra: 11.055, dec: 35.97, ly: 8.31, col: '#ff8a5c', r: 2.4, planets: [{ name: 'b', P: 12.95 }, { name: 'c', P: 2946 }],
+      facts: 'Красный карлик · 8,31 св. года · виден в бинокль в Большой Медведице',
+      note: 'Две планеты: горячая суперземля b и далёкая холодная c с периодом около 8 лет.' },
+    { id: 'sirius', name: 'Сириус', ra: 6.752, dec: -16.72, ly: 8.6, col: '#cfe2ff', r: 4.6, comp: [{ col: '#ffffff', sep: 12, small: true }], planets: [],
+      facts: 'Самая яркая звезда ночного неба · 8,6 св. года · белая звезда A и белый карлик B',
+      note: 'Сириус B — белый карлик размером с Землю и массой почти как у Солнца; пара обходит общий центр за 50 лет. Планет не найдено.' },
+    { id: 'epseri', name: 'Эпсилон Эридана', ra: 3.549, dec: -9.46, ly: 10.5, col: '#ffcf90', r: 3.0, disc: true, planets: [{ name: 'b', P: 2690 }],
+      facts: 'Молодая оранжевая звезда · 10,5 св. года · около 400–800 млн лет',
+      note: 'Похожа на молодую Солнечную систему: газовый гигант b и два пояса пыли и астероидов, внутренний и внешний.' },
+    { id: 'ross128', name: 'Росс 128', ra: 11.795, dec: 0.80, ly: 11.0, col: '#ff6a40', r: 2.0, planets: [{ name: 'b', P: 9.87 }],
+      facts: 'Спокойный красный карлик · 11 св. года · приближается к нам',
+      note: 'Планета b чуть массивнее Земли и получает от звезды примерно столько же тепла, сколько Земля от Солнца.' },
+    { id: 'tauceti', name: 'Тау Кита', ra: 1.734, dec: -15.94, ly: 11.9, col: '#fff0c8', r: 3.2, planets: [{ name: 'g', P: 20, cand: true }, { name: 'h', P: 49.4, cand: true }, { name: 'e', P: 163, cand: true }, { name: 'f', P: 636, cand: true }],
+      facts: 'Жёлтая звезда, похожая на Солнце · 11,9 св. года',
+      note: 'Четыре кандидата в суперземли и плотный пояс пыли и комет — в десять раз плотнее нашего пояса Койпера.' },
+    { id: 'luyten', name: 'Звезда Лейтена', ra: 7.459, dec: 5.23, ly: 12.35, col: '#ff7a4a', r: 2.2, planets: [{ name: 'b', P: 18.65 }, { name: 'c', P: 4.72 }],
+      facts: 'Красный карлик · 12,3 св. года',
+      note: 'Планета b — суперземля в зоне, где возможна жидкая вода. В 2017 году к ней отправили радиосообщение «Sónar Calling GJ273b».' },
+    { id: 'teegarden', name: 'Звезда Тигардена', ra: 2.888, dec: 16.88, ly: 12.5, col: '#ff5a3a', r: 1.8, planets: [{ name: 'b', P: 4.91 }, { name: 'c', P: 11.4 }, { name: 'd', P: 26.1 }],
+      facts: 'Тусклый красный карлик · 12,5 св. года · открыт только в 2003 году',
+      note: 'Три планеты земной массы; у b одна из самых высоких оценок сходства с Землёй.' },
+    { id: 'trappist', name: 'TRAPPIST-1', ra: 23.106, dec: -5.04, ly: 40.7, col: '#ff4a30', r: 1.8,
+      planets: ['b', 'c', 'd', 'e', 'f', 'g', 'h'].map((n, i) => ({ name: n, P: [1.51, 2.42, 4.05, 6.1, 9.21, 12.35, 18.77][i] })),
+      facts: 'Ультрахолодный красный карлик · 40,7 св. года · размером чуть больше Юпитера',
+      note: 'Семь планет размером с Землю, три — в зоне, где возможна вода. Все уместились бы внутри орбиты Меркурия. Их изучает телескоп «Уэбб».' },
+  ].map(o => ({ ...o, kind: 'star', wpos: raDec(o.ra, o.dec).map(v => v * (18 + 5 * Math.log(o.ly / 4))),   // own log scale beyond the Oort cloud sx: -999, sy: -999, sr: 6,
+    ph: o.planets.map(() => rnd(0, TAU)) }));
 
-  const farK = () => clamp((0.95 - zoom / zoom0) / 0.45, 0, 1);   // 0 near the planets, 1 when pulled far back
+  // 0 near the planets, 1 when pulled far back or looking at another star system
+  const farK = () => focus && focus.kind === 'star' ? 1 : clamp((0.95 - zoom / zoom0) / 0.45, 0, 1);
   function drawBeyond(taken) {
     const fk = farK();
     if (fk <= 0) return;
@@ -715,12 +759,38 @@
       if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
       ctx.globalAlpha = q.o * fk; ctx.fillStyle = q.c; const sz = q.s || 1.1; ctx.fillRect(x, y, sz, sz);
     }
-    for (const st of NEAR_STARS) {
-      const [x, y] = project(...st.p), r = st.r * (0.8 + 0.4 * fk);
+    const glow = (x, y, r, col, a) => {
       const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
-      g.addColorStop(0, st.col); g.addColorStop(0.25, st.col + '88'); g.addColorStop(1, st.col + '00');
-      ctx.globalAlpha = fk; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, TAU); ctx.fill();
-      st.sx = x; st.sy = y;
+      g.addColorStop(0, col); g.addColorStop(0.25, col + '88'); g.addColorStop(1, col + '00');
+      ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, TAU); ctx.fill();
+    };
+    const mk = Math.min(4, Math.max(1, Math.sqrt(zoom / (zoom0 * 0.2))));   // systems grow as the camera closes in
+    for (const st of STAR_SYSTEMS) {
+      const [x, y] = project(...st.wpos), r = st.r * (0.8 + 0.4 * fk) * Math.sqrt(mk);
+      st.sx = x; st.sy = y; st.sr = r * 2;
+      if (x < -60 || y < -60 || x > W + 60 || y > H + 60) continue;
+      const mp = st === focus ? 9 : mk, mc = Math.min(mp, 4);   // the chosen system opens up
+      glow(x, y, r, st.col, fk);
+      for (const c of st.comp || []) glow(x + c.sep * mc, y - c.sep * 0.4 * mc, c.small ? r * 0.45 : r * 0.8, c.col, fk);
+      if (st.disc) {   // Epsilon Eridani's two dust belts
+        ctx.strokeStyle = '#ffcf90'; ctx.lineWidth = 2 * mk;
+        for (const rr of [9, 18]) { ctx.globalAlpha = 0.18 * fk; ctx.beginPath(); ctx.ellipse(x, y, rr * mp, rr * 0.45 * mp, -0.3, 0, TAU); ctx.stroke(); }
+        ctx.lineWidth = 1;
+      }
+      // planets on illustrative orbits (log of the period sets the radius), moving at their real periods
+      const host = st.id === 'alphacen' ? [x + 26 * mc, y - 10.4 * mc] : [x, y], ms = st.id === 'alphacen' ? mp * 0.45 : mp;
+      st.planets.forEach((pl, i) => {
+        const pr = (5 + 4 * Math.log(1 + pl.P) / Math.log(4)) * ms;
+        st.ph[i] += TAU / pl.P * frameDays;
+        ctx.globalAlpha = 0.18 * fk; ctx.strokeStyle = pl.cand ? '#8899bb' : '#a8c8ff';
+        ctx.setLineDash(pl.cand ? [2, 3] : []);
+        ctx.beginPath(); ctx.ellipse(host[0], host[1], pr, pr * 0.45, -0.3, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]);
+        const a = st.ph[i], c = Math.cos(-0.3), sn = Math.sin(-0.3), ex = Math.cos(a) * pr, ey = Math.sin(a) * pr * 0.45;
+        pl.sx = host[0] + ex * c - ey * sn; pl.sy = host[1] + ex * sn + ey * c;
+        ctx.globalAlpha = fk; ctx.fillStyle = pl.cand ? '#aab4cc' : '#dfe8ff';
+        ctx.beginPath(); ctx.arc(pl.sx, pl.sy, Math.max(1, 0.9 * Math.sqrt(ms)), 0, TAU); ctx.fill();
+      });
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     if (!namesOn() || fk < 0.5) return;
@@ -732,13 +802,18 @@
       taken && taken.push([x, y, w]);
       ctx.globalAlpha = fk; ctx.fillStyle = col; ctx.fillText(txt, x, y); ctx.globalAlpha = 1;
     };
-    for (const st of NEAR_STARS) label(`${st.name.toUpperCase()} · ${st.note || String(st.ly).replace('.', ',')} СВ. ГОДА`, st.sx + 8, st.sy, 'rgba(255,230,200,0.85)');
+    for (const st of STAR_SYSTEMS) {
+      const n = st.planets.filter(p => !p.cand).length;
+      label(`${st.name.toUpperCase()} · ${String(st.ly).replace('.', ',')} СВ. Г.${n ? ' · ПЛАНЕТ: ' + n : ''}`, st.sx + st.sr + 4, st.sy - 10, 'rgba(255,230,200,0.85)');
+      if (st === focus) for (const pl of st.planets) label(pl.name, pl.sx + 4, pl.sy, pl.cand ? 'rgba(170,180,204,0.8)' : 'rgba(220,232,255,0.9)');
+    }
     const [hx, hy] = project(...atAU(NOSE, 125)); label('ГЕЛИОПАУЗА · ≈120 А. Е.', hx + 6, hy, 'rgba(170,215,255,0.85)');
     const [ox, oy] = project(...atAU(eclDir(150, 50), 60000)); label('ОБЛАКО ООРТА', ox, oy, 'rgba(200,215,245,0.75)');
   }
 
   function drawOverview(dDays) {
     M_ov = camM(yaw, tilt);
+    persp = 22 + 90 * farK();
     updateSmall();
     if (GLR) {
       const fk = farK();
@@ -1043,13 +1118,13 @@
     const belt = link(`
       attribute vec4 aOrb;   // compressed distance, start longitude, height, angular speed (rad/day)
       attribute vec4 aLook; attribute vec3 aCol;
-      uniform mat3 uM; uniform vec2 uF, uHalf, uView;
+      uniform mat3 uM; uniform vec3 uF; uniform vec2 uHalf, uView; uniform float uPersp;
       uniform float uZoom, uDpr, uDays, uTime, uStreak, uSizeK;
       varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
       void main() {
         float L = aOrb.y + aOrb.w * uDays, d = aOrb.x;
-        vec3 c = uM * vec3(d * cos(L) - uF.x, aOrb.z, -d * sin(L) - uF.y);
-        float k = 22.0 / (22.0 - c.z * 0.6);
+        vec3 c = uM * vec3(d * cos(L) - uF.x, aOrb.z - uF.y, -d * sin(L) - uF.z);
+        float k = uPersp / max(uPersp * 0.3, uPersp - c.z * 0.6);
         vec2 pos = (uHalf + c.xy * uZoom * k) * uDpr;
         vec3 tc = uM * vec3(-sin(L), 0.0, -cos(L));
         float dl = length(tc.xy);
@@ -1091,7 +1166,7 @@
     return {
       part, partU: loc(part, ['uMr', 'uLt', 'uCenter', 'uView', 'uRpx', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uAlpha', 'uOut']),
       partA: { orb: gl.getAttribLocation(part, 'aOrb'), look: gl.getAttribLocation(part, 'aLook'), col: gl.getAttribLocation(part, 'aCol') },
-      belt, beltU: loc(belt, ['uM', 'uF', 'uHalf', 'uView', 'uZoom', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uSizeK']),
+      belt, beltU: loc(belt, ['uM', 'uF', 'uPersp', 'uHalf', 'uView', 'uZoom', 'uDpr', 'uDays', 'uTime', 'uStreak', 'uSizeK']),
       beltA: { orb: gl.getAttribLocation(belt, 'aOrb'), look: gl.getAttribLocation(belt, 'aLook'), col: gl.getAttribLocation(belt, 'aCol') },
       bright, brightU: loc(bright, ['uSrc', 'uTexel', 'uThr']),
       blur, blurU: loc(blur, ['uSrc', 'uDir']),
@@ -2203,7 +2278,7 @@
     if (b && b.isFar) {   // pull far back from the planets
       closeTarget = 0; pendingSel = undefined; focus = null;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
-      zoomTarget = zoom0 * 0.27; tiltTarget = 0.5;
+      zoomTarget = zoom0 * 0.26; tiltTarget = 0.5;
       showInfo(b);
       hint.textContent = 'ЩИПОК — ПРИБЛИЗИТЬ · «ОБЗОР» — ВЕРНУТЬСЯ К ПЛАНЕТАМ';
       return;
@@ -2211,7 +2286,7 @@
     if (b && b.kind) {
       closeTarget = 0; pendingSel = undefined;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
-      focus = b; zoomTarget = zoom0 * (b.a > 0 && b.a < 3.5 ? 2.6 : 1.4);
+      focus = b; zoomTarget = zoom0 * (b.kind === 'star' ? 1.6 : b.a > 0 && b.a < 3.5 ? 2.6 : 1.4);
       showInfo(b);
       hint.textContent = 'НАЖМИ «ОБЗОР», ЧТОБЫ ВЕРНУТЬСЯ';
       return;
@@ -2249,7 +2324,7 @@
     } else if (pts.size === 2 && pinch0) {
       const [a, b] = [...pts.values()], k = Math.hypot(a.x - b.x, a.y - b.y) / pinch0.d;
       if (inClose) cZoom = clamp(pinch0.cz * k, 0.35, 3.5);
-      else zoom = zoomTarget = clamp(pinch0.z * k, zoom0 * 0.25, zoom0 * 14);
+      else zoom = zoomTarget = clamp(pinch0.z * k, zoom0 * 0.15, zoom0 * 14);
     }
   });
   cv.addEventListener('pointerup', e => {
@@ -2259,7 +2334,7 @@
     if (tap && !tap.moved && performance.now() - tap.t < 500 && closeTarget === 0) {
       const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
       let best = null, bd = Infinity;
-      for (const o of showSmall ? [...BODIES, ...SMALL] : BODIES) {
+      for (const o of [...BODIES, ...(showSmall ? SMALL : []), ...(farK() > 0.3 ? STAR_SYSTEMS : [])]) {
         const d = Math.hypot(x - o.sx, y - o.sy) - o.sr;
         if (d < 18 && d < bd) { bd = d; best = o; }
       }
@@ -2272,7 +2347,7 @@
     e.preventDefault();
     const k = Math.exp(-e.deltaY * 0.0015);
     if (closeTarget === 1) cZoom = clamp(cZoom * k, 0.35, 3.5);
-    else zoom = zoomTarget = clamp(zoom * k, zoom0 * 0.25, zoom0 * 14);
+    else zoom = zoomTarget = clamp(zoom * k, zoom0 * 0.15, zoom0 * 14);
   }, { passive: false });
 
   // high-resolution maps are built in the background, most-visited bodies first
@@ -2282,12 +2357,12 @@
   });
 
   // ---------- frame loop ----------
-  let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0;
+  let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0, frameDays = 0;
   function frame(now) {
     // rAF timestamps can predate the start time (e.g. a page opened in the background): never step time backwards
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
     const dDays = speed * dt;
-    days += dDays;
+    days += dDays; frameDays = dDays;
     if (GLR) pumpTextures(closeK > 0 ? 10 : 5);
 
     // transition between overview and close-up
@@ -2300,9 +2375,9 @@
       cYaw += vcYaw; vcYaw *= 0.93;
       if (!reduce && closeK === 0) yaw += dt * 0.02;   // slow drift around the system
     }
-    const [tx, , tz] = focus ? planetPos(focus) : [0, 0, 0];
+    const [tx, ty, tz] = focus ? planetPos(focus) : [0, 0, 0];
     const ease = Math.min(1, dt * 4);
-    fx += (tx - fx) * ease; fz += (tz - fz) * ease;
+    fx += (tx - fx) * ease; fy += (ty - fy) * ease; fz += (tz - fz) * ease;
     zoom += (zoomTarget - zoom) * ease;
     if (tiltTarget !== null) { tilt += (tiltTarget - tilt) * ease; if (Math.abs(tiltTarget - tilt) < 0.002 || pts.size) tiltTarget = null; }
 
