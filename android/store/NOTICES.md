@@ -31,3 +31,4 @@ OFL: https://openfontlicense.org — шрифты встроены в прило
 
 ## Earth photograph
 - "The Blue Marble", Apollo 17 crew, 7 December 1972 (AS17-148-22727). NASA, public domain. Used as Earth's day-side texture.
+- "Blue Marble" 2002 composites over the Indian and Atlantic oceans (NASA Goddard Space Flight Center, MODIS data). NASA, public domain. Used for Earth's surface.

@@ -139,7 +139,7 @@
       © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом.</p>
     <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
     <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
-    <p><b>Земля.</b> Дневное полушарие — снимок «Голубой шарик» (The Blue Marble), экипаж «Аполлона-17», 7 декабря 1972 года. NASA, общественное достояние. Обратная сторона нарисована.</p>
+    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Тихий океан и участки, которых нет на снимках, нарисованы. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
     <p><small>Поверхности остальных планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
   </div>
 </section>
@@ -214,6 +214,8 @@
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
   const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), earth: new Image() };
   photos.earth.src = 'img/earth-apollo17.jpg';
+  const earthIndian = new Image(), earthAtlantic = new Image();
+  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg';
   photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
@@ -365,7 +367,7 @@
       facts: 'Диаметр 12 104 км · 0,72 а. е. · год 225 дней · сутки 243 земных, вращение обратное · спутников нет',
       note: 'Самая горячая планета: под плотными облаками около 465 °C.' },
     { id: 'earth', e: 0.0167, peri: 102.95, pole: 90, name: 'Земля', a: 1.0, L0: 100.46, n: 0.98561, r: 4.4, col: ['#d8f0ff', '#3d86ff', '#0b2a6b'],
-      rot: 0.99727, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
+      rot: 0.99726958, spin0: 100.46, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
       facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
       note: 'Единственная известная планета с жизнью. Вокруг летают станции МКС и Тяньгун, телескопы Хаббл и Чандра, метеоспутники и тысячи спутников связи и навигации; на ночной стороне горят города.',
       moons: [{ name: 'Луна', a: 60.3, P: 27.32, L0: 218.316, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
@@ -532,7 +534,7 @@
       const c = p.ov || (p.ov = { cv: document.createElement('canvas'), t: -1, pr: 0, ext: 1 });
       if (t - c.t > 0.2 || Math.abs(pr - c.pr) > pr * 0.04) {
         const [wx, , wz] = planetPos(p), wl = Math.hypot(wx, wz) || 1;
-        const o = renderBodyGL(p, pr, M_ov, [-wx / wl, 0, -wz / wl], (TAU * days / p.rot) % TAU, DPR, false, t);
+        const o = renderBodyGL(p, pr, M_ov, [-wx / wl, 0, -wz / wl], (TAU * days / p.rot + (p.spin0 || 0) * DEG) % TAU, DPR, false, t);
         c.ext = o.ext;
         if (c.cv.width !== o.px) c.cv.width = c.cv.height = o.px;
         const cc = c.cv.getContext('2d');
@@ -655,7 +657,7 @@
       o.sx = sp[0]; o.sy = sp[1]; o.sr = pr;
       const [wx, , wz] = planetPos(o), wl = Math.hypot(wx, wz) || 1;
       const Lw = o.isSun ? [0, 0, 1] : [-wx / wl, 0, -wz / wl];
-      renderBodyGL(o, pr, M_ov, Lw, (TAU * days / o.rot) % TAU, DPR, false, t, { cx: sp[0] * DPR, cy: sp[1] * DPR, Rpx: pr * DPR, w: T.w, h: T.h, over: true });
+      renderBodyGL(o, pr, M_ov, Lw, (TAU * days / o.rot + (o.spin0 || 0) * DEG) % TAU, DPR, false, t, { cx: sp[0] * DPR, cy: sp[1] * DPR, Rpx: pr * DPR, w: T.w, h: T.h, over: true });
     }
     gl.disable(gl.BLEND);
     bloomAndCompose(0.5, 1.0, 1);
@@ -1164,30 +1166,53 @@
     return t;
   }
 
-  // Earth's day side comes from the Apollo 17 "Blue Marble" (NASA, public domain): the photo shows the hemisphere
-  // centred near 26° S with south at the top; it is projected back onto the sphere and faded into the procedural globe
-  const EARTH_PHOTO = { lat0: -26 * DEG, cx: 512, cy: 512, r: 482 };
-  let earthPix;   // undefined: not tried yet, null: unavailable (not loaded or a file:// tainted canvas)
-  function earthPixels() {
-    if (earthPix !== undefined) return earthPix;
-    if (!ready(photos.earth)) return null;
-    try {
-      const c = document.createElement('canvas'); c.width = c.height = 1024;
-      const g = c.getContext('2d'); g.drawImage(photos.earth, 0, 0, 1024, 1024);
-      earthPix = g.getImageData(0, 0, 1024, 1024).data;
-    } catch (e) { earthPix = null; }
-    return earthPix;
+  // Earth's surface comes from three whole-disc photos placed by fitting their cameras to known landmarks:
+  // Apollo 17 "Blue Marble" (1972, perspective from ~19 Earth radii, south up) and NASA's 2002 Blue Marble
+  // composites over the Indian and Atlantic oceans (orthographic). All NASA, public domain. lat0/lon0: disc
+  // centre; rho: image roll; D: camera distance in Earth radii; east: fade out past this x (night or dusk side).
+  const EARTH_PHOTOS = [
+    { im: photos.earth, n: 1024, cx: 512, cy: 512, r: 482.6, lat0: -30.14, lon0: 33.76, rho: 170.79, D: 18.87, east: 2 },
+    { im: earthIndian, n: 672, cx: 336, cy: 336, r: 330, lat0: -9.95, lon0: 101.09, rho: 1.1, D: Infinity, east: 0.6 },
+    { im: earthAtlantic, n: 672, cx: 336, cy: 336, r: 330, lat0: 37.78, lon0: -40.04, rho: -2.28, D: Infinity, east: 0.35 },
+  ];
+  for (const q of EARTH_PHOTOS) {   // camera basis: centre c, image right a, image up b
+    const p0 = q.lat0 * DEG, l0 = q.lon0 * DEG, ro = q.rho * DEG;
+    const e = [-Math.sin(l0), 0, -Math.cos(l0)], nn = [-Math.sin(p0) * Math.cos(l0), Math.cos(p0), Math.sin(p0) * Math.sin(l0)];
+    q.c = [Math.cos(p0) * Math.cos(l0), Math.sin(p0), -Math.cos(p0) * Math.sin(l0)];
+    q.a = e.map((v, i) => Math.cos(ro) * v + Math.sin(ro) * nn[i]);
+    q.b = e.map((v, i) => -Math.sin(ro) * v + Math.cos(ro) * nn[i]);
+    q.f = isFinite(q.D) ? q.r * Math.sqrt(q.D * q.D - 1) : q.r;
   }
-  function earthPhotoAt(x, y, z) {   // -> [r, g, b, weight] or null
-    const P = earthPixels(); if (!P) return null;
-    const s0 = Math.sin(EARTH_PHOTO.lat0), c0 = Math.cos(EARTH_PHOTO.lat0);
-    const cosc = x * c0 + y * s0;            // centre direction (c0, s0, 0)
-    if (cosc < 0.08) return null;
-    const u = -z, v = -x * s0 + y * c0;      // east and north on the disc (the globe spins toward -z, so east is -z)
-    const px = Math.round(EARTH_PHOTO.cx - u * EARTH_PHOTO.r), py = Math.round(EARTH_PHOTO.cy + v * EARTH_PHOTO.r);   // south is up
-    if (px < 0 || py < 0 || px > 1023 || py > 1023) return null;
-    const k = (py * 1024 + px) * 4;
-    return [P[k], P[k + 1], P[k + 2], smooth(clamp((cosc - 0.12) / 0.25, 0, 1))];
+  function photoPixels(q) {   // undefined: not tried, null: unavailable (not loaded, or a tainted file:// canvas)
+    if (q.pix !== undefined) return q.pix;
+    if (!ready(q.im)) return null;
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = q.n;
+      const g = c.getContext('2d'); g.drawImage(q.im, 0, 0, q.n, q.n);
+      q.pix = g.getImageData(0, 0, q.n, q.n).data;
+    } catch (e) { q.pix = null; }
+    return q.pix;
+  }
+  const dot3 = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  // texture point (x, y, z) on the unit sphere (x, z equatorial; geographic longitude = -atan2(z, x)) -> [r, g, b, weight] or null
+  function earthPhotoAt(x, y, z) {
+    const pt = [x, y, z];
+    let R = 0, G = 0, B = 0, Wt = 0, Wmax = 0;
+    for (const q of EARTH_PHOTOS) {
+      const P = photoPixels(q); if (!P) continue;
+      const w = dot3(pt, q.c), lim = isFinite(q.D) ? 1 / q.D : 0;
+      if (w < lim + 0.08) continue;
+      const k = isFinite(q.D) ? q.D - w : 1, u = dot3(pt, q.a) / k, v = dot3(pt, q.b) / k;
+      const px = Math.round(q.cx + q.f * u), py = Math.round(q.cy - q.f * v);
+      if (px < 0 || py < 0 || px >= q.n || py >= q.n) continue;
+      const xn = (px - q.cx) / q.r;
+      // fade toward the limb (haze, foreshortening) and away from the photo's own night side
+      const wt = smooth(clamp((w - lim - 0.1) / 0.3, 0, 1)) * (1 - smooth(clamp((xn - q.east) / 0.25, 0, 1)));
+      if (wt <= 0) continue;
+      const i = (py * q.n + px) * 4;
+      R += P[i] * wt; G += P[i + 1] * wt; B += P[i + 2] * wt; Wt += wt; Wmax = Math.max(Wmax, wt);
+    }
+    return Wt > 0 ? [R / Wt, G / Wt, B / Wt, Wmax] : null;
   }
 
   // surface (+ city lights in alpha) and cloud maps, generated a few rows at a time so the page never stalls
@@ -1198,7 +1223,7 @@
     return {
       step(deadline) {
         // the high-resolution Earth waits briefly for its photo to load
-        if (cloud && row === 0 && w > 128 && !ready(photos.earth) && performance.now() - t0 < 5000) return false;
+        if (cloud && row === 0 && w > 128 && !EARTH_PHOTOS.every(q => ready(q.im)) && performance.now() - t0 < 6000) return false;
         while (row < h) {
           const lat = (0.5 - (row + 0.5) / h) * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
           for (let i = 0; i < w; i++) {
@@ -1807,7 +1832,7 @@
     const R = closeR * cZoom;
     const Mc = closeCam();
     const T = tiltM(b);
-    const spin = (TAU * days / b.rot) % TAU;
+    const spin = (TAU * days / b.rot + (b.spin0 || 0) * DEG) % TAU;
     // sunlight in world and in body coordinates
     const [wx, , wz] = planetPos(b);
     const wl = Math.hypot(wx, wz) || 1;
