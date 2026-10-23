@@ -1,0 +1,11 @@
+# Android app (Capacitor) build outputs; see android/PLAN.md
+node_modules/
+www/
+android/project/app/src/main/assets/public/
+android/project/app/src/main/assets/capacitor.config.json
+android/project/app/src/main/assets/capacitor.plugins.json
+android/project/**/build/
+android/project/.gradle/
+android/project/local.properties
+*.keystore
+*.jks

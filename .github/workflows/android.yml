@@ -1,0 +1,128 @@
+# Builds the Android app (Capacitor) from solar-system.html. See android/PLAN.md.
+#
+# Release signing (optional). Repository secrets:
+#   ANDROID_KEYSTORE_BASE64    base64 of the upload keystore (.jks):  base64 -w0 release.jks
+#   ANDROID_KEYSTORE_PASSWORD  keystore password
+#   ANDROID_KEY_ALIAS          key alias
+#   ANDROID_KEY_PASSWORD       key password
+# Without ANDROID_KEYSTORE_BASE64 only the debug APK is built.
+name: Android
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - solar-system.html
+      - img/**
+      - package.json
+      - package-lock.json
+      - capacitor.config.json
+      - scripts/**
+      - android/project/**
+      - .github/workflows/android.yml
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Debug APK
+        working-directory: android/project
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/project/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - name: Signing key present?
+        run: echo "HAS_KEY=$HAS_KEY"
+
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: env.HAS_KEY == 'true'
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - uses: actions/setup-java@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+        if: env.HAS_KEY == 'true'
+
+      - if: env.HAS_KEY == 'true'
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Signed AAB and APK
+        if: env.HAS_KEY == 'true'
+        working-directory: android/project
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_PATH"
+          chmod +x gradlew
+          ./gradlew bundleRelease assembleRelease --no-daemon
+          rm -f "$ANDROID_KEYSTORE_PATH"
+
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: app-release
+          path: |
+            android/project/app/build/outputs/bundle/release/*.aab
+            android/project/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

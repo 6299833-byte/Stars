@@ -2017,6 +2017,7 @@
   let swallowTap = false;
   cv.addEventListener('pointerdown', () => { if (!panel.hidden) { setMenu(false); swallowTap = true; } });
   addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+  window.solarBack = () => { if (!panel.hidden) { setMenu(false); return true; } if (closeTarget === 1 || pendingSel !== undefined || focus) { choose(null); return true; } return false; };   // Android back button
   const skyBtn = document.getElementById('t-sky');
   skyBtn.addEventListener('click', () => {
     const order = ['cluster', 'nebula', 'field'];

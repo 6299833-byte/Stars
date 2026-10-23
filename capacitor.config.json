@@ -1,0 +1,20 @@
+{
+  "appId": "io.github.stars.solarsystem",
+  "appName": "Солнечная система",
+  "webDir": "www",
+  "backgroundColor": "#020309",
+  "android": {
+    "path": "android/project",
+    "backgroundColor": "#020309",
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
