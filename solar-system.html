@@ -1,7 +1,7 @@
 <title>Солнечная система</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-  /* Layout: full-bleed canvas; name, date and facts top-left; body picker and time controls at the bottom */
+  /* Layout: full-bleed canvas; name, date and facts top-left; a menu button bottom-left opens a panel with controls and an About tab */
   :root {
     --space: #020309;
     --ink: #e6ecff;
@@ -10,6 +10,7 @@
     --chip-line: rgba(140, 170, 255, 0.22);
     --chip-on: rgba(255, 190, 90, 0.2);
     --chip-on-line: rgba(255, 205, 130, 0.85);
+    --panel: rgba(9, 12, 26, 0.94);
     --serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
     --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
     color-scheme: dark;
@@ -41,47 +42,73 @@
   .head h1 { margin: 0; font: 500 32px/1 var(--serif); text-wrap: balance; }
   .head p { margin: 0; font: 11px/1.55 var(--mono); letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
   .head .note { font: italic 16px/1.35 var(--serif); letter-spacing: 0; color: var(--ink); max-width: 26rem; }
-  .bottom {
-    position: fixed; left: 0; right: 0; bottom: 0;
-    padding-block: 0 calc(12px + env(safe-area-inset-bottom, 0px));
-    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-    pointer-events: none;
+  /* phone on its side: keep the header small so the planet stays clear */
+  @media (max-height: 520px) {
+    .head { max-width: 20rem; gap: 3px; }
+    .head h1 { font-size: 22px; }
+    .head p { font-size: 9.5px; line-height: 1.45; }
+    .head .note { display: none; }
+    .hint { display: none; }
   }
   .hint {
+    position: fixed; left: 0; right: 0;
+    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
     font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center;
     text-shadow: 0 0 6px var(--space);
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-left: max(80px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
+    pointer-events: none;
   }
-  .row {
-    display: flex; gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    pointer-events: auto;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    touch-action: pan-x;
+  .menu-btn {
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--chip); border: 1px solid var(--chip-line);
+    display: grid; place-content: center; gap: 4px;
+    cursor: pointer; padding: 0;
   }
-  .row::-webkit-scrollbar { display: none; }
-  .row > :first-child { margin-left: auto; }
-  .row > :last-child { margin-right: auto; }
-  .row button {
-    flex: none;
+  .menu-btn span { display: block; width: 18px; height: 2px; border-radius: 1px; background: var(--ink); transition: transform 0.2s, opacity 0.2s; }
+  .menu-btn[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .menu-btn[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+  .menu-btn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+  .panel {
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    width: min(24rem, calc(100vw - 32px));
+    max-height: calc(100% - 96px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
+    overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+    box-sizing: border-box;
+    background: var(--panel); border: 1px solid var(--chip-line); border-radius: 16px;
+    padding: 12px 14px 14px;
+    display: flex; flex-direction: column; gap: 12px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    user-select: text; -webkit-user-select: text;
+  }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--chip-line); padding-bottom: 8px; }
+  .tabs button {
+    font: 12px/1 var(--mono); letter-spacing: 0.06em; color: var(--muted);
+    background: none; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { color: var(--ink); background: var(--chip-on); }
+  .group { display: flex; flex-direction: column; gap: 7px; }
+  .group h3 { margin: 0; font: 9.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button {
     font: 12px/1 var(--mono); letter-spacing: 0.04em;
     color: var(--ink); background: var(--chip);
     border: 1px solid var(--chip-line); border-radius: 999px;
     padding: 9px 12px; cursor: pointer;
     display: inline-flex; align-items: center; gap: 7px;
   }
-  .credit {
-    font: 9px/1.4 var(--mono); letter-spacing: 0.04em; color: var(--muted); text-align: center;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    pointer-events: auto; text-shadow: 0 0 6px var(--space);
-  }
-  .credit a { color: inherit; }
-  .row button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
-  .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .chips button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
+  .chips .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .about { display: flex; flex-direction: column; gap: 10px; font: 11.5px/1.6 var(--mono); color: var(--ink); }
+  .about p { margin: 0; max-width: 60ch; }
+  .about .lead { font: italic 17px/1.35 var(--serif); }
+  .about a { color: var(--chip-on-line); }
+  .about small { color: var(--muted); font-size: 10.5px; }
   button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400&display=swap">
@@ -95,22 +122,49 @@
   <p class="note" id="note" hidden></p>
 </div>
 
-<div class="bottom">
-  <div class="hint" id="hint">ВЫБЕРИ ПЛАНЕТУ ВНИЗУ ИЛИ НАЖМИ НА НЕЁ</div>
-  <div class="row" id="bodies" role="toolbar" aria-label="Выбор объекта"></div>
-  <div class="row" role="toolbar" aria-label="Скорость времени">
-    <button id="s-0" data-speed="0" aria-pressed="false">Пауза</button>
-    <button id="s-h" data-speed="0.0416667" aria-pressed="false">1 час/с</button>
-    <button id="s-1" data-speed="1" aria-pressed="false">1 день/с</button>
-    <button id="s-10" data-speed="10" aria-pressed="true">10 дней/с</button>
-    <button id="s-100" data-speed="100" aria-pressed="false">100 дней/с</button>
-    <button id="s-now" data-action="now">Сегодня</button>
-    <button id="t-names" aria-pressed="true">Названия</button>
-    <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
-    <button id="t-sky">Фон: скопление Девы</button>
+<div class="hint" id="hint">НАЖМИ НА ПЛАНЕТУ ИЛИ ОТКРОЙ МЕНЮ</div>
+
+<button class="menu-btn" id="menu-btn" aria-label="Меню" aria-expanded="false" aria-controls="panel"><span></span><span></span><span></span></button>
+
+<section class="panel" id="panel" hidden>
+  <div class="tabs" role="tablist">
+    <button id="tab-nav" role="tab" aria-selected="true" aria-controls="pane-nav">Управление</button>
+    <button id="tab-about" role="tab" aria-selected="false" aria-controls="pane-about">О проекте</button>
   </div>
-  <div class="credit">Фоны: скопление галактик Девы, туманности Лагуна и Трёхраздельная, <a href="https://rubinobservatory.org/gallery/image-releases/rubins-cosmos" target="_blank" rel="noopener">Rubin’s Cosmos</a>, снимки <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
-</div>
+  <div id="pane-nav" role="tabpanel" class="group" style="gap:14px">
+    <div class="group">
+      <h3>Куда смотреть</h3>
+      <div class="chips" id="bodies" role="toolbar" aria-label="Выбор объекта"></div>
+    </div>
+    <div class="group">
+      <h3>Время</h3>
+      <div class="chips" role="toolbar" aria-label="Скорость времени">
+        <button id="s-0" data-speed="0" aria-pressed="false">Пауза</button>
+        <button id="s-h" data-speed="0.0416667" aria-pressed="false">1 час/с</button>
+        <button id="s-1" data-speed="1" aria-pressed="false">1 день/с</button>
+        <button id="s-10" data-speed="10" aria-pressed="true">10 дней/с</button>
+        <button id="s-100" data-speed="100" aria-pressed="false">100 дней/с</button>
+        <button id="s-now" data-action="now">Сегодня</button>
+      </div>
+    </div>
+    <div class="group">
+      <h3>Показывать</h3>
+      <div class="chips">
+        <button id="t-names" aria-pressed="true">Названия</button>
+        <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
+        <button id="t-sky">Фон: скопление Девы</button>
+      </div>
+    </div>
+  </div>
+  <div id="pane-about" role="tabpanel" class="about" hidden>
+    <p class="lead">Модель Солнечной системы: планеты на своих местах на сегодняшнюю дату, их спутники, кольца, астероиды, кометы, станции и зонды.</p>
+    <p><b>Фоновые снимки.</b> Скопление галактик Девы, туманности Лагуна и Трёхраздельная, <a href="https://rubinobservatory.org/gallery/image-releases/rubins-cosmos" target="_blank" rel="noopener">Rubin’s Cosmos</a>.<br>
+      © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом.</p>
+    <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
+    <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
+    <p><small>Поверхности планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
+  </div>
+</section>
 
 <script>
 (() => {
@@ -1351,7 +1405,7 @@
 
   // a marker with a label; off-screen targets are pinned to the edge with an arrow
   function edgeMarker(x, y, label, col, A) {
-    const m = 14, top = 150, bottom = H - 120;
+    const m = 14, top = Math.min(150, H * 0.3), bottom = H - 80;
     const inside = x > m && x < W - m && y > top && y < bottom;
     ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'middle';
@@ -1896,6 +1950,18 @@
   document.getElementById('s-now').addEventListener('click', () => { days = nowDays(); });
   const namesBtn = document.getElementById('t-names');
   namesBtn.addEventListener('click', () => { showNames = !showNames; namesBtn.setAttribute('aria-pressed', String(showNames)); });
+  // menu: bottom-left button opens a panel with the controls and an About tab
+  const menuBtn = document.getElementById('menu-btn'), panel = document.getElementById('panel');
+  const setMenu = open => { panel.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
+  menuBtn.addEventListener('click', () => setMenu(panel.hidden));
+  const tabs = { nav: document.getElementById('tab-nav'), about: document.getElementById('tab-about') };
+  const panes = { nav: document.getElementById('pane-nav'), about: document.getElementById('pane-about') };
+  for (const k in tabs) tabs[k].addEventListener('click', () => {
+    for (const j in tabs) { tabs[j].setAttribute('aria-selected', String(j === k)); panes[j].hidden = j !== k; }
+  });
+  bodiesRow.addEventListener('click', e => { if (e.target.closest('button')) setMenu(false); });
+  cv.addEventListener('pointerdown', () => setMenu(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
   const skyBtn = document.getElementById('t-sky');
   skyBtn.addEventListener('click', () => {
     const order = ['cluster', 'nebula', 'field'];
@@ -1916,14 +1982,13 @@
       titleEl.textContent = 'Солнечная система';
       subEl.textContent = 'Положения планет на эту дату · расстояния и размеры сжаты';
       noteEl.hidden = true;
-      hint.textContent = 'ВЫБЕРИ ПЛАНЕТУ ВНИЗУ ИЛИ НАЖМИ НА НЕЁ';
+      hint.textContent = 'НАЖМИ НА ПЛАНЕТУ ИЛИ ОТКРОЙ МЕНЮ';
     } else {
       titleEl.textContent = b.name;
       subEl.textContent = b.facts;
       noteEl.textContent = b.note; noteEl.hidden = false;
       hint.textContent = 'ПРОВЕДИ — ОБЛЕТЕТЬ · ЩИПОК — МАСШТАБ';
     }
-    chips.get(b)?.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
   function enter(b) {
