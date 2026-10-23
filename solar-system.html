@@ -790,9 +790,12 @@
               vec4 rt = texture2D(uRing, vec2((rr - uRin) / (uRout - uRin), 0.5));
               float k = 0.55 + 0.45 * smoothstep(0.0, 0.25, abs(uLt.y));
               if (sign(qz.y) != sign(uLt.y)) k *= 0.55;                      // looking at the unlit face
-              float d = dot(q, uLt);
-              if (d < 0.0 && dot(q, q) - d * d < 1.0) k *= 0.06;             // planet's shadow
               float ra = rt.a * uRingK;
+              float d = dot(q, uLt);
+              if (d < 0.0) {   // planet's shadow: soft penumbra; shaded ice stays translucent instead of a black slab
+                float sh = smoothstep(0.93, 1.04, sqrt(max(dot(q, q) - d * d, 0.0)));
+                k *= mix(0.1, 1.0, sh); ra *= mix(0.4, 1.0, sh);
+              }
               col = vec4(rt.rgb * k * ra, ra) + col * (1.0 - ra);
             }
           }
@@ -865,7 +868,7 @@
         vec3 tc = uMr * vec3(-sin(a), 0.0, cos(a));
         float vis = (c.z < 0.0 && dot(c.xy, c.xy) < 1.0) ? 0.0 : 1.0;    // behind the planet
         float d = dot(q, uLt);
-        if (d < 0.0 && dot(q, q) - d * d < 1.0) vis *= 0.06;             // in the planet's shadow
+        if (d < 0.0) vis *= mix(0.06, 1.0, smoothstep(0.93, 1.04, sqrt(max(dot(q, q) - d * d, 0.0))));   // in the planet's shadow
         float tw = aLook.z >= 0.0 ? 0.5 + 0.5 * sin(uTime * 2.2 + aLook.z) : 1.0;
         float wid = aLook.x * uDpr * (1.0 + 0.3 * c.z / uOut);
         float dl = length(tc.xy);
