@@ -114,6 +114,9 @@
       <h3>Время</h3>
       <div class="chips" role="toolbar" aria-label="Скорость времени">
         <button id="s-0" data-speed="0" aria-pressed="false">Пауза</button>
+        <button id="s-rt" data-speed="0.0000115741" aria-pressed="false">Реальное время</button>
+        <button id="s-m" data-speed="0.000694444" aria-pressed="false">1 мин/с</button>
+        <button id="s-10m" data-speed="0.00694444" aria-pressed="false">10 мин/с</button>
         <button id="s-h" data-speed="0.0416667" aria-pressed="false">1 час/с</button>
         <button id="s-1" data-speed="1" aria-pressed="false">1 день/с</button>
         <button id="s-10" data-speed="10" aria-pressed="true">10 дней/с</button>
@@ -403,6 +406,7 @@
   let days = nowDays(), speed = 10;
   const fmtDay = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   const fmtTime = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmtSec = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   // ---------- overview particles ----------
   const belt = [], kuiper = [], wind = [];
@@ -1918,7 +1922,7 @@
   const speedBtns = [...document.querySelectorAll('[data-speed]')];
   function setSpeed(v) {
     speed = v;
-    speedBtns.forEach(o => o.setAttribute('aria-pressed', String(Math.abs(parseFloat(o.dataset.speed) - v) < 1e-6)));
+    speedBtns.forEach(o => { const b = parseFloat(o.dataset.speed); o.setAttribute('aria-pressed', String(Math.abs(b - v) <= b * 1e-3 + 1e-12)); });
   }
   speedBtns.forEach(b => b.addEventListener('click', () => setSpeed(parseFloat(b.dataset.speed))));
   document.getElementById('s-now').addEventListener('click', () => { days = nowDays(); });
@@ -1971,7 +1975,11 @@
     closeSetup(b);
     if (GLR) bodyTextures(b, true);
     closeTarget = 1;
-    if (speedBeforeClose === null) { speedBeforeClose = speed; if (speed > 1) setSpeed(1 / 24); }
+    // a close-up pace per body: fast low orbits (Earth's stations, Mars orbiters) need minutes per second,
+    // giant planets spin in about 10 hours, the Sun, Mercury and Venus barely turn
+    const pace = b.satl || b.id === 'earth' || b.id === 'mars' ? 1 / 1440 : b.rings || b.id === 'jupiter' ? 1 / 144 : 1 / 24;
+    if (speedBeforeClose === null) speedBeforeClose = speed;
+    if (speed > 0) setSpeed(pace);   // keep a pause, otherwise switch to this body's pace
     showInfo(b);
   }
   function choose(b) {
@@ -2105,7 +2113,7 @@
       }
     }
 
-    const ds = (closeTarget ? fmtTime : fmtDay).format(new Date(J2000 + days * 86400000));
+    const ds = (closeTarget ? (speed > 0 && speed < 0.002 ? fmtSec : fmtTime) : fmtDay).format(new Date(J2000 + days * 86400000));
     if (ds !== lastDateStr) { dateEl.textContent = ds; lastDateStr = ds; }
     requestAnimationFrame(frame);
   }
