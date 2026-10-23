@@ -127,7 +127,7 @@
     <div class="group">
       <h3>Показывать</h3>
       <div class="chips">
-        <button id="t-names" aria-pressed="true">Названия</button>
+        <button id="t-names" aria-pressed="false">Названия: скрыть</button>
         <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
         <button id="t-sky">Фон: скопление Девы</button>
       </div>
@@ -317,7 +317,7 @@
     // the Sun's close-up sits in front of the Lagoon and Trifid nebulae
     if (ready(photos.nebula)) photoSky(bgSun, photos.nebula, 0.62, 0.55, 0.62);
     else { bgSun.width = bgCanvas.width; bgSun.height = bgCanvas.height; bgSun.getContext('2d').drawImage(bgCanvas, 0, 0); }
-    if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.6, 0.62, 0.5);
+    if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72);
     else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
   }
   addEventListener('resize', resize);
@@ -514,7 +514,9 @@
     } else sphere(x, y, pr, p.col, lx, ly);
   }
 
-  let showNames = true;
+  // labels: 'none' (default), 'planets' (the eight planets only) or 'all'
+  let nameMode = 'none';
+  const namesOn = () => nameMode !== 'none', namesAll = () => nameMode === 'all';
   function drawNamesOverview() {
     ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'middle';
@@ -593,6 +595,7 @@
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     // belts
+    if (Math.abs(days - SC.beltData.day0) > 20000) { SC.beltData = null; SC.beltData = buildBeltGpu(); }   // float32 headroom after very long runs
     const B = SC.beltData, U = SC.beltU, a = SC.beltA;
     gl.useProgram(SC.belt);
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
@@ -644,7 +647,7 @@
       renderOverviewGL(t);
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(glc, 0, 0); ctx.restore();
       if (showSmall) drawSmallBodies();
-      if (showNames) { const taken = drawNamesOverview(); drawProbes(taken); if (showSmall) drawSmallLabels(taken); }
+      if (namesOn()) { const taken = drawNamesOverview(); if (namesAll()) { drawProbes(taken); if (showSmall) drawSmallLabels(taken); } }
       return;
     }
     drawOrbits();
@@ -663,7 +666,7 @@
       drawPlanetOverview(p);
     }
     if (!sunDrawn) drawSunOverview();
-    if (showNames) { drawNamesOverview(); drawProbes(); }
+    if (namesOn()) { const taken = drawNamesOverview(); if (namesAll()) drawProbes(taken); }
   }
 
   // =====================================================================
@@ -675,8 +678,8 @@
     const alat = Math.abs(lat);
     switch (b.id) {
       case 'sun': {
-        const g = fbm(x * 9, y * 9, z * 9, 3);
-        let c = mix([255, 120, 20], [255, 235, 150], smooth(clamp((g - 0.3) * 2.2, 0, 1)));
+        const g = fbm(x * 22, y * 22, z * 22, 3) * 0.7 + fbm(x * 6, y * 6, z * 6, 2) * 0.3;
+        let c = mix([255, 150, 40], [255, 240, 180], smooth(clamp((g - 0.3) * 2.2, 0, 1)));
         if (alat < 35 * DEG && alat > 6 * DEG && fbm(x * 4 + 9, y * 4, z * 4, 3) > 0.74) c = [120, 50, 10];
         return c;
       }
@@ -704,16 +707,17 @@
         return c;
       }
       case 'jupiter': {
-        const b2 = Math.sin(lat * 15 + fbm(x * 3, y * 3, z * 3) * 2.4);
-        let c = b2 > 0.5 ? [240, 228, 205] : b2 > 0 ? [215, 180, 140] : b2 > -0.5 ? [190, 130, 85] : [150, 95, 65];
+        const b2 = clamp(Math.sin(lat * 22 + fbm(x * 3, y * 3, z * 3) * 2.4) * 0.75 + 0.35 * Math.sin(lat * 47), -1, 1);
+        const s2 = (b2 + 1) / 2;
+        let c = s2 > 0.5 ? mix([215, 180, 140], [240, 228, 205], smooth((s2 - 0.5) * 2)) : mix([150, 95, 65], [215, 180, 140], smooth(s2 * 2));
         c = mix(c, [255, 245, 230], (n - 0.5) * 0.8);
         const dl = (lat + 22 * DEG) / (6 * DEG), dn = Math.atan2(Math.sin(lon), Math.cos(lon)) / (13 * DEG);
         if (dl * dl + dn * dn < 1) c = mix([200, 85, 55], [225, 120, 80], dl * dl + dn * dn);
         return c;
       }
       case 'saturn': {
-        const b2 = Math.sin(lat * 11 + fbm(x * 2, y * 2, z * 2) * 1.2);
-        return mix(mix([210, 180, 120], [240, 222, 170], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.6);
+        const b2 = Math.sin(lat * 18 + fbm(x * 2, y * 6, z * 2) * 0.8);
+        return mix(mix([190, 160, 105], [245, 228, 180], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.25);
       }
       case 'uranus':
         return mix([130, 205, 215], [175, 235, 240], (Math.sin(lat * 5) + 1) * 0.3 + (n - 0.5) * 0.4);
@@ -768,7 +772,7 @@
         if (uSun > 0.5) {
           vec4 t2 = texture2D(uTex, uv + vec2(0.004 * sin(uTime * 0.7), 0.003 * cos(uTime * 0.9)));
           vec3 sc = mix(t.rgb, t2.rgb, 0.5 + 0.5 * sin(uTime * 1.3 + t.r * 12.0));
-          return sc * (0.35 + 0.65 * pow(c.z, 0.5)) * vec3(1.08, 1.0, 0.92);
+          return sc * mix(vec3(0.75, 0.28, 0.05), vec3(1.0), pow(c.z, 0.6)) * vec3(1.08, 1.0, 0.92);   // limb darkening reddens the edge
         }
         float ndl = dot(c, uLc);
         float soft = smoothstep(-0.12, 0.18, ndl);
@@ -789,10 +793,11 @@
           if (s > 0.0) { vec3 h2 = q + s * uLt; res *= 1.0 - 0.85 * ringA(length(h2.xz)); }
         }
         res += uAtm * uAtmK * pow(1.0 - c.z, 3.0) * (soft * 0.85 + 0.05);
-        res += vec3(0.9, 0.95, 1.0) * pow(1.0 - c.z, 7.0) * soft * uBand * 0.6;        // glossy rim light
+        res += vec3(0.9, 0.95, 1.0) * pow(1.0 - c.z, 7.0) * soft * uBand * 0.35;       // glossy rim light
+        res += mix(uAtm, vec3(0.55, 0.7, 1.0), 0.5) * pow(1.0 - c.z, 5.0) * (1.0 - soft) * 0.18;   // faint rim on the night side
         vec3 hh = normalize(uLc + vec3(0.0, 0.0, 1.0));
         res += vec3(1.0) * pow(max(dot(c, hh), 0.0), 24.0) * uBand * 0.12 * soft;      // soft sheen
-        return res;
+        return 1.0 - exp(-res * 1.35);                                                 // soft shoulder instead of clipping
       }
       void main() {
         vec2 p = vP;
@@ -804,6 +809,11 @@
           zs = z;
           float cov = 1.0 - smoothstep(1.0 - uPix * 1.5, 1.0, r);
           col = vec4(shadeSurface(vec3(p, z)) * cov, cov);
+        }
+        if (uSun > 0.5 && r > 1.0) {   // corona
+          float a = exp(-(r - 1.0) * 9.0) * 0.6;
+          col.rgb += vec3(1.0, 0.6, 0.25) * a * (1.0 - col.a);
+          col.a += a * (1.0 - col.a);
         }
         if (uSun < 0.5 && uAtmK > 0.0 && r > 0.9) {
           float g = exp(-max(r - 1.0, 0.0) * 30.0) * smoothstep(0.9, 1.0, r);
@@ -895,9 +905,9 @@
       varying vec3 vCol; varying vec2 vDir; varying float vLen, vWid, vSize;
       void main() {
         float a = aOrb.y + aOrb.w * uDays, r = aOrb.x;
-        vec3 q = vec3(r * cos(a), aOrb.z, r * sin(a));
+        vec3 q = vec3(r * cos(a), aOrb.z, -r * sin(a));   // prograde, like the spin and the planets' orbits
         vec3 c = uMr * q;
-        vec3 tc = uMr * vec3(-sin(a), 0.0, cos(a));
+        vec3 tc = uMr * vec3(-sin(a), 0.0, -cos(a));
         float vis = (c.z < 0.0 && dot(c.xy, c.xy) < 1.0) ? 0.0 : 1.0;    // behind the planet
         float d = dot(q, uLt);
         if (d < 0.0) vis *= mix(0.06, 1.0, smoothstep(0.93, 1.04, sqrt(max(dot(q, q) - d * d, 0.0))));   // in the planet's shadow
@@ -905,7 +915,7 @@
         float wid = aLook.x * uDpr * (1.0 + 0.3 * c.z / uOut);
         float dl = length(tc.xy);
         vec2 dir = dl > 1e-4 ? tc.xy / dl : vec2(1.0, 0.0);
-        float len = wid * 1.6 + min(aOrb.w * r * uRpx * uStreak * dl, 16.0 * uDpr);
+        float len = wid * 1.6 + min(aOrb.w * r * uRpx * max(uStreak, 0.0025) * dl, 16.0 * uDpr);   // minimum exposure keeps the motion streaks
         vSize = len + 2.0;
         vec2 pos = uCenter + c.xy * uRpx;
         gl_Position = vis > 0.0 ? vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0) : vec4(2.0, 2.0, 0.0, 1.0);
@@ -1021,9 +1031,9 @@
           else { c = [0, 0, 0, 0]; for (const [r0, r1, dens, cols] of b.rings) if (r >= r0 && r <= r1) c = [...hexRgb(pick(cols)), Math.min(1, dens * 2)]; }
           if (Math.random() < c[3]) break;
         }
-        const j = rnd(0.75, 1.25), flake = Math.random() < 0.03;
-        const col = flake ? [255, 252, 245] : [Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)];
-        push(r, rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.1, 0.3)) * (b.id === 'saturn' ? 1 : 0.8), -1, col);
+        const j = rnd(0.75, 1.25), flake = Math.random() < 0.008;
+        const col = flake ? [255, 240, 215] : [Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)];
+        push(r, rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.07, 0.22)) * (b.id === 'saturn' ? 1 : 0.8), -1, col);
       }
     }
     if (!b.isSun) {
@@ -1078,7 +1088,7 @@
       gl.disableVertexAttribArray(a.look); gl.disableVertexAttribArray(a.col);
       gl.disable(gl.BLEND);
     }
-    bloomAndCompose(0.55, b.isSun ? 0.8 : 0.95, A);
+    bloomAndCompose(0.6, b.isSun ? 1.1 : 0.9, A);
   }
 
   // bloom: bright-pass at quarter resolution, two separable blur rounds, then add back onto the scene
@@ -1089,7 +1099,7 @@
     gl.uniform1i(SC.brightU.uSrc, 0); gl.uniform2f(SC.brightU.uTexel, 1 / T.w, 1 / T.h); gl.uniform1f(SC.brightU.uThr, thr);
     gl.bindTexture(gl.TEXTURE_2D, T.scene.tex); quadPass(SC.bright, T.a);
     gl.useProgram(SC.blur); gl.uniform1i(SC.blurU.uSrc, 0);
-    for (const sp of [1, 2.2]) {
+    for (const sp of [1, 2.2, 4.5]) {
       gl.uniform2f(SC.blurU.uDir, sp / T.a.w, 0); gl.bindTexture(gl.TEXTURE_2D, T.a.tex); quadPass(SC.blur, T.b);
       gl.uniform2f(SC.blurU.uDir, 0, sp / T.a.h); gl.bindTexture(gl.TEXTURE_2D, T.b.tex); quadPass(SC.blur, T.a);
     }
@@ -1206,7 +1216,7 @@
     const { U } = GLR;
     const T = rotX(b.tiltAx * DEG), TS = mul(T, rotY(spin)), M = mul(Mcam, TS), Mr = mul(Mcam, T);
     const ring = ringProfile(b);
-    const ext = ring ? ring.rout * 1.02 : 1.12;
+    const ext = ring ? ring.rout * 1.02 : b.isSun ? 1.6 : 1.12;   // the Sun's corona needs room
     let px = 0;
     gl.useProgram(GLR.prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, GLR.buf);
@@ -1377,12 +1387,12 @@
   }
   // orbit-plane position -> body-frame vector (y = north pole)
   function orbitVec(q) {
-    const x0 = q.r * Math.cos(q.u), z0 = q.r * Math.sin(q.u), zc = z0 * q.ci;
+    const x0 = q.r * Math.cos(q.u), z0 = -q.r * Math.sin(q.u), zc = z0 * q.ci;   // prograde
     return [x0 * q.co + zc * q.so, -z0 * q.si, -x0 * q.so + zc * q.co];
   }
 
   // a marker with a label; off-screen targets are pinned to the edge with an arrow
-  function edgeMarker(x, y, label, col, A) {
+  function edgeMarker(x, y, label, col, A, taken) {
     const m = 14, top = 24, bottom = H - 80;
     const inside = x > m && x < W - m && y > top && y < bottom;
     ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -1394,6 +1404,7 @@
       ctx.fillStyle = 'rgba(205,215,245,0.85)';
       const w = ctx.measureText(label).width;
       const box = x + 8 + w > W - 8 ? [x - w + 4, y + 13, w] : [x + 8, y, w];   // no room on the right: put it underneath
+      if (taken) for (let k = 0; k < 4 && taken.some(r => box[0] < r[0] + r[2] && box[0] + w > r[0] && Math.abs(box[1] - r[1]) < 12); k++) box[1] += 12;
       ctx.fillText(label, box[0], box[1]);
       ctx.globalAlpha = 1;
       return box;
@@ -1407,10 +1418,13 @@
       ctx.restore();
       ctx.fillStyle = 'rgba(205,215,245,0.85)';
       const w = ctx.measureText(label).width;
-      const lx = clamp(ex - Math.cos(ang) * 14 - (Math.cos(ang) > 0 ? w : 0), 8, W - 8 - w);
-      ctx.fillText(label, lx, clamp(ey - Math.sin(ang) * 14, top, bottom));
+      const box = [clamp(ex - Math.cos(ang) * 14 - (Math.cos(ang) > 0 ? w : 0), 8, W - 8 - w), clamp(ey - Math.sin(ang) * 14, top, bottom), w];
+      const up = box[1] > (top + bottom) / 2 ? -12 : 12;   // step away from the screen edge when labels collide
+      if (taken) for (let k = 0; k < 4 && taken.some(r => box[0] < r[0] + r[2] && box[0] + w > r[0] && Math.abs(box[1] - r[1]) < 12); k++) box[1] += up;
+      ctx.fillText(label, box[0], box[1]);
+      ctx.globalAlpha = 1;
+      return box;
     }
-    ctx.globalAlpha = 1;
   }
 
   // deep-space probes, approximate: distance grows at each probe's cruise rate from its early-2025 value
@@ -1424,7 +1438,7 @@
     for (const pr of PROBES) {
       const au = pr.au0 + pr.rate * yrs, d = dist(au), lo = pr.lon * DEG, la = pr.lat * DEG;
       const [x, y] = project(d * Math.cos(lo) * Math.cos(la), d * Math.sin(la), -d * Math.sin(lo) * Math.cos(la));
-      const box = edgeMarker(x, y, `${pr.name.toUpperCase()} · ${Math.round(au)} А. Е.`, '#9fe8ff', 1);
+      const box = edgeMarker(x, y, `${pr.name.toUpperCase()} · ${Math.round(au)} А. Е.`, '#9fe8ff', 1, taken);
       if (box && taken) taken.push(box);
     }
   }
@@ -1660,7 +1674,7 @@
       const label = o.name.toUpperCase(), w = ctx.measureText(label).width + 4, y = o.sy;
       let x = o.sx + o.sr + 5;
       if (x + w > W - 8) x = o.sx - o.sr - 5 - w;
-      if (x < 4 || y < 0 || y > H || taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 12)) continue;
+      if (x < 4 || x + w > W - 4 || y < 10 || y > H - 10 || taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 12)) continue;
       taken.push([x, y, w]);
       ctx.fillStyle = o === focus ? 'rgba(255,215,150,0.95)' : o.kind === 'interstellar' ? 'rgba(255,190,160,0.8)' : o.kind === 'comet' ? 'rgba(190,230,255,0.7)' : o.kind === 'probe' ? 'rgba(160,232,255,0.75)' : 'rgba(205,210,230,0.55)';
       ctx.fillText(label, x, y);
@@ -1693,6 +1707,7 @@
 
   function closeSetup(b) {
     const C = buildClose(b);
+    if (C.gpu) C.gpu.day0 = days;   // keep the shader's angle term small for float32
     cTilt = b.isSun ? 0.2 : b.rings ? 0.12 : 0.3; cZoom = 1;
     cRoll = b.rings && b.id !== 'uranus' ? -0.5 : 0;
     // turn the camera so sunlight comes from the left, a little toward the viewer, like the reference video
@@ -1719,7 +1734,7 @@
     for (let i = 0; i < P.length; i++) {
       const q = P[i];
       q.a += q.w * dDays;
-      const u = Math.cos(q.a) * q.r, w = Math.sin(q.a) * q.r, h = q.h;
+      const u = Math.cos(q.a) * q.r, w = -Math.sin(q.a) * q.r, h = q.h;
       const X = T[0] * u + T[1] * h + T[2] * w, Y = T[3] * u + T[4] * h + T[5] * w, Z = T[6] * u + T[7] * h + T[8] * w;
       let o = q.o;
       // planet's shadow on the rings
@@ -1745,7 +1760,7 @@
     for (const m of C.moons) {
       m.ph += TAU / m.P * dDays;
       const Mi = m.inc ? mul(T, rotX(m.inc * DEG)) : T;
-      const u = Math.cos(m.ph) * m.rd, w = Math.sin(m.ph) * m.rd;
+      const u = Math.cos(m.ph) * m.rd, w = -Math.sin(m.ph) * m.rd;   // prograde; Triton's negative period makes it retrograde
       m.X = Mi[0] * u + Mi[2] * w; m.Y = Mi[3] * u + Mi[5] * w; m.Z = Mi[6] * u + Mi[8] * w;
       m.sx = Mc[0] * m.X + Mc[1] * m.Y + Mc[2] * m.Z; m.sy = Mc[3] * m.X + Mc[4] * m.Y + Mc[5] * m.Z; m.sd = Mc[6] * m.X + Mc[7] * m.Y + Mc[8] * m.Z;
       const dl = m.X * Lw[0] + m.Y * Lw[1] + m.Z * Lw[2];
@@ -1864,7 +1879,7 @@
         const th = f.th + f.drift * u;
         ctx.globalAlpha = A * (1 - u) * 0.8;
         ctx.fillStyle = u < 0.5 ? '#ffd27a' : '#ff7a2e';
-        ctx.fillRect(Math.cos(th) * R * (1 + h), Math.sin(th) * R * (1 + h), f.s, f.s);
+        ctx.beginPath(); ctx.arc(Math.cos(th) * R * (1 + h), Math.sin(th) * R * (1 + h), f.s * 0.6, 0, TAU); ctx.fill();
       }
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
@@ -1874,17 +1889,22 @@
     satPass(true);
     moonPass(true);
 
-    if (showNames && C.moons.length) {
+    if (namesAll() && C.moons.length) {
       ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = `rgba(205,215,245,${(0.8 * A).toFixed(3)})`;
       for (const m of C.moons) {
         const hidden = m.sd < 0 && m.sx * m.sx + m.sy * m.sy < 1;   // behind the planet
         if (hidden) continue;
-        ctx.fillText(m.name.toUpperCase(), m.sx * R + Math.max(1.6, m.size * R) + 5, m.sy * R);
+        const label = m.name.toUpperCase(), w = ctx.measureText(label).width, r = Math.max(1.6, m.size * R);
+        let lx = m.sx * R + r + 5;
+        const sx = closeCx + lx * closeSc, sy = closeCy + m.sy * R * closeSc;
+        if (sx + w * closeSc > W - 6) lx = m.sx * R - r - 5 - w;   // flip left near the right edge
+        if (closeCx + lx * closeSc < 4 || sy < 10 || sy > H - 10) continue;
+        ctx.fillText(label, lx, m.sy * R);
       }
     }
-    if (showNames && S) {
+    if (namesAll() && S) {
       ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
       ctx.textBaseline = 'middle';
       const taken = [];
@@ -1924,10 +1944,16 @@
     speed = v;
     speedBtns.forEach(o => { const b = parseFloat(o.dataset.speed); o.setAttribute('aria-pressed', String(Math.abs(b - v) <= b * 1e-3 + 1e-12)); });
   }
-  speedBtns.forEach(b => b.addEventListener('click', () => setSpeed(parseFloat(b.dataset.speed))));
+  speedBtns.forEach(b => b.addEventListener('click', () => { setSpeed(parseFloat(b.dataset.speed)); speedBeforeClose = null; }));
   document.getElementById('s-now').addEventListener('click', () => { days = nowDays(); });
   const namesBtn = document.getElementById('t-names');
-  namesBtn.addEventListener('click', () => { showNames = !showNames; namesBtn.setAttribute('aria-pressed', String(showNames)); });
+  const NAME_LABEL = { none: 'Названия: скрыть', planets: 'Названия: планеты', all: 'Названия: все' };
+  namesBtn.addEventListener('click', () => {
+    const order = ['none', 'planets', 'all'];
+    nameMode = order[(order.indexOf(nameMode) + 1) % order.length];
+    namesBtn.textContent = NAME_LABEL[nameMode];
+    namesBtn.setAttribute('aria-pressed', String(nameMode !== 'none'));
+  });
   // menu: bottom-left button opens a panel with the controls and an About tab
   const menuBtn = document.getElementById('menu-btn'), panel = document.getElementById('panel');
   const setMenu = open => { panel.hidden = !open; menuBtn.setAttribute('aria-expanded', String(open)); };
@@ -1938,7 +1964,8 @@
     for (const j in tabs) { tabs[j].setAttribute('aria-selected', String(j === k)); panes[j].hidden = j !== k; }
   });
   bodiesRow.addEventListener('click', e => { if (e.target.closest('button')) setMenu(false); });
-  cv.addEventListener('pointerdown', () => setMenu(false));
+  let swallowTap = false;
+  cv.addEventListener('pointerdown', () => { if (!panel.hidden) { setMenu(false); swallowTap = true; } });
   addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
   const skyBtn = document.getElementById('t-sky');
   skyBtn.addEventListener('click', () => {
@@ -2030,6 +2057,7 @@
   cv.addEventListener('pointerup', e => {
     pts.delete(e.pointerId);
     if (pts.size < 2) pinch0 = null;
+    if (swallowTap) { swallowTap = false; tap = null; }
     if (tap && !tap.moved && performance.now() - tap.t < 500 && closeTarget === 0) {
       const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
       let best = null, bd = Infinity;
@@ -2104,7 +2132,7 @@
       ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * cxp, DPR * cyp);
       drawClose(sel, e, dDays, t);
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-      if (sel.id === 'earth' && showNames && e > 0.9) {
+      if (sel.id === 'earth' && namesAll() && e > 0.9) {
         // James Webb Space Telescope at Sun–Earth L2, 1.5 million km straight away from the Sun
         const [x, , z] = planetPos(sel), l = Math.hypot(x, z);
         const Mc = closeCam(), k = 4.6 * closeR * cZoom * sc;
