@@ -29,36 +29,11 @@
     font-family: var(--mono);
   }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  .head {
-    position: fixed;
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    left: max(16px, env(safe-area-inset-left, 0px));
-    right: max(16px, env(safe-area-inset-right, 0px));
-    max-width: 30rem;
-    pointer-events: none;
-    display: flex; flex-direction: column; gap: 5px;
-    text-shadow: 0 0 8px var(--space);
-  }
-  .head h1 { margin: 0; font: 500 32px/1 var(--serif); text-wrap: balance; }
+  .head { display: flex; flex-direction: column; gap: 5px; padding-bottom: 10px; border-bottom: 1px solid var(--chip-line); }
+  .head h1 { margin: 0; font: 500 28px/1 var(--serif); text-wrap: balance; }
   .head p { margin: 0; font: 11px/1.55 var(--mono); letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
   .head .note { font: italic 16px/1.35 var(--serif); letter-spacing: 0; color: var(--ink); max-width: 26rem; }
-  /* phone on its side: keep the header small so the planet stays clear */
-  @media (max-height: 520px) {
-    .head { max-width: 20rem; gap: 3px; }
-    .head h1 { font-size: 22px; }
-    .head p { font-size: 9.5px; line-height: 1.45; }
-    .head .note { display: none; }
-    .hint { display: none; }
-  }
-  .hint {
-    position: fixed; left: 0; right: 0;
-    bottom: calc(30px + env(safe-area-inset-bottom, 0px));
-    font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); text-align: center;
-    text-shadow: 0 0 6px var(--space);
-    padding-left: max(80px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
-    pointer-events: none;
-  }
+  .hint { font: 9.5px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); }
   .menu-btn {
     position: fixed;
     left: max(16px, env(safe-area-inset-left, 0px));
@@ -77,7 +52,7 @@
     left: max(16px, env(safe-area-inset-left, 0px));
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
     width: min(24rem, calc(100vw - 32px));
-    max-height: calc(100% - 96px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
+    max-height: calc(100% - 90px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
     overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
     box-sizing: border-box;
     background: var(--panel); border: 1px solid var(--chip-line); border-radius: 16px;
@@ -115,18 +90,17 @@
 
 <canvas id="sky"></canvas>
 
-<div class="head">
-  <h1 id="title">Солнечная система</h1>
-  <p id="date">—</p>
-  <p id="sub">Положения планет на эту дату · расстояния и размеры сжаты</p>
-  <p class="note" id="note" hidden></p>
-</div>
-
-<div class="hint" id="hint">НАЖМИ НА ПЛАНЕТУ ИЛИ ОТКРОЙ МЕНЮ</div>
 
 <button class="menu-btn" id="menu-btn" aria-label="Меню" aria-expanded="false" aria-controls="panel"><span></span><span></span><span></span></button>
 
 <section class="panel" id="panel" hidden>
+  <div class="head">
+    <h1 id="title">Солнечная система</h1>
+    <p id="date">—</p>
+    <p id="sub">Положения планет на эту дату · расстояния и размеры сжаты</p>
+    <p class="note" id="note" hidden></p>
+    <p class="hint" id="hint">НАЖМИ НА ПЛАНЕТУ НА ЭКРАНЕ ИЛИ ВЫБЕРИ НИЖЕ</p>
+  </div>
   <div class="tabs" role="tablist">
     <button id="tab-nav" role="tab" aria-selected="true" aria-controls="pane-nav">Управление</button>
     <button id="tab-about" role="tab" aria-selected="false" aria-controls="pane-about">О проекте</button>
@@ -1405,7 +1379,7 @@
 
   // a marker with a label; off-screen targets are pinned to the edge with an arrow
   function edgeMarker(x, y, label, col, A) {
-    const m = 14, top = Math.min(150, H * 0.3), bottom = H - 80;
+    const m = 14, top = 24, bottom = H - 80;
     const inside = x > m && x < W - m && y > top && y < bottom;
     ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
     ctx.textBaseline = 'middle';
@@ -1982,7 +1956,7 @@
       titleEl.textContent = 'Солнечная система';
       subEl.textContent = 'Положения планет на эту дату · расстояния и размеры сжаты';
       noteEl.hidden = true;
-      hint.textContent = 'НАЖМИ НА ПЛАНЕТУ ИЛИ ОТКРОЙ МЕНЮ';
+      hint.textContent = 'НАЖМИ НА ПЛАНЕТУ НА ЭКРАНЕ ИЛИ ВЫБЕРИ НИЖЕ';
     } else {
       titleEl.textContent = b.name;
       subEl.textContent = b.facts;
@@ -2076,13 +2050,14 @@
   // ---------- frame loop ----------
   let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0;
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt; frameDt = dt;
+    // rAF timestamps can predate the start time (e.g. a page opened in the background): never step time backwards
+    const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
     const dDays = speed * dt;
     days += dDays;
     if (GLR) pumpTextures(closeK > 0 ? 10 : 5);
 
     // transition between overview and close-up
-    closeK = closeTarget ? Math.min(1, closeK + dt / 1.3) : Math.max(0, closeK - dt / 0.9);
+    closeK = clamp(closeTarget ? closeK + dt / 1.3 : closeK - dt / 0.9, 0, 1);
     if (closeTarget === 0 && closeK === 0 && pendingSel) { const b = pendingSel; pendingSel = undefined; enter(b); }
     const e = smooth(smooth(closeK));
 
