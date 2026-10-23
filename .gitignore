@@ -12,3 +12,5 @@ android/project/local.properties
 *.zip
 __pycache__/
 *.pyc
+desktop/engine/bin/
+desktop/engine/obj/
