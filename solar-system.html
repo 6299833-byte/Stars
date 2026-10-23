@@ -189,6 +189,55 @@
       g.fillStyle = `rgba(220,225,255,${rnd(0.03, 0.22).toFixed(2)})`;
       g.fillRect(x, y, 0.6, 0.6);
     }
+    // two faint emission nebulae: pink hydrogen glow, a blue reflection lobe, dark dust lanes
+    const nebula = (cx, cy, size) => {
+      for (let i = 0; i < 140; i++) {
+        const x = cx + gauss() * size, y = cy + gauss() * size * 0.8, r = rnd(0.08, 0.45) * size;
+        const cg = g.createRadialGradient(x, y, 0, x, y, r);
+        cg.addColorStop(0, pick(['rgba(255,70,130,0.06)', 'rgba(220,50,80,0.05)', 'rgba(255,130,160,0.045)', 'rgba(255,180,170,0.03)']));
+        cg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+      }
+      for (let i = 0; i < 18; i++) {
+        const x = cx + size * 0.7 + gauss() * size * 0.35, y = cy - size * 0.5 + gauss() * size * 0.3, r = rnd(0.12, 0.35) * size;
+        const cg = g.createRadialGradient(x, y, 0, x, y, r);
+        cg.addColorStop(0, 'rgba(80,130,255,0.06)'); cg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+      }
+      g.globalCompositeOperation = 'source-over';
+      for (let k = 0; k < 3; k++) {   // soft, curving dust lanes splitting the glow
+        let a = rnd(0, TAU), x = cx + gauss() * size * 0.3, y = cy + gauss() * size * 0.3;
+        const bend = rnd(-0.06, 0.06);
+        for (let i = 0; i < 50; i++) {
+          a += bend; x += Math.cos(a) * size * 0.025; y += Math.sin(a) * size * 0.025;
+          const r = rnd(0.05, 0.11) * size;
+          const cg = g.createRadialGradient(x, y, 0, x, y, r);
+          cg.addColorStop(0, 'rgba(2,3,9,0.1)'); cg.addColorStop(1, 'rgba(2,3,9,0)');
+          g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+        }
+      }
+      g.globalCompositeOperation = 'lighter';
+    };
+    nebula(W * 0.82, H * 0.2, Math.min(W, H) * 0.16);
+    nebula(W * 0.14, H * 0.78, Math.min(W, H) * 0.12);
+    // distant galaxies: small ellipticals and a few tiny two-armed spirals
+    for (let i = 0; i < Math.round(W * H / 9000); i++) {
+      const x = Math.random() * W, y = Math.random() * H, r = rnd(1.5, 5), rot = rnd(0, Math.PI), fl = rnd(0.25, 0.9);
+      g.save(); g.translate(x, y); g.rotate(rot); g.scale(1, fl);
+      const warm = Math.random() < 0.6;
+      const cg = g.createRadialGradient(0, 0, 0, 0, 0, r);
+      cg.addColorStop(0, warm ? 'rgba(255,235,205,0.55)' : 'rgba(215,225,255,0.5)'); cg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = cg; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+      if (!warm && r > 3.5) {
+        g.strokeStyle = 'rgba(170,195,255,0.22)'; g.lineWidth = 0.7;
+        for (const s0 of [0, Math.PI]) {
+          g.beginPath();
+          for (let k = 0; k <= 20; k++) { const th = s0 + k / 20 * 3.2, rr = r * 0.3 * Math.exp(0.35 * th); const px = Math.cos(th) * rr, py = Math.sin(th) * rr; k ? g.lineTo(px, py) : g.moveTo(px, py); }
+          g.stroke();
+        }
+      }
+      g.restore();
+    }
     // ordinary stars in real star colours, a few bright ones with a soft glow
     const SC_ = ['#9bb0ff', '#aabfff', '#cad7ff', '#f8f7ff', '#fff4ea', '#ffd2a1', '#ffcc6f'];
     for (let i = 0; i < W * H / 900; i++) {
@@ -1360,6 +1409,15 @@
       facts: 'Зонд NASA · подлетает к Солнцу на 6,1 млн км · орбита за 88 дней (примерная)', note: 'Самый быстрый аппарат в истории: у Солнца разгоняется до 690 000 км/ч.' },
     { id: 'solo', name: 'Solar Orbiter', kind: 'probe', a: 0.6, e: 0.52, i: 17, O: 120, w: 40, col: '#9fe8ff',
       facts: 'Зонд ESA и NASA · орбита около полугода (примерная)', note: 'Наклон его орбиты постепенно растёт, чтобы впервые снять полюса Солнца.' },
+    // interstellar visitors: hyperbolic orbits (e > 1) given by perihelion distance q
+    { id: 'oumuamua', name: 'Оумуамуа', kind: 'interstellar', q: 0.2559, e: 1.2011, i: 122.74, O: 24.60, w: 241.81, Tp: [2017, 9, 9], col: '#ffb38a',
+      facts: '1I/Оумуамуа · первый межзвёздный объект · открыт в 2017 году · около 100–400 м',
+      note: 'Пролетел через Солнечную систему и уходит навсегда. Необычно вытянутый и без кометного хвоста.' },
+    { id: 'borisov', name: 'Комета Борисова', kind: 'interstellar', q: 2.006, e: 3.356, i: 44.05, O: 308.15, w: 209.12, Tp: [2019, 12, 8], col: '#bfe8ff',
+      facts: '2I/Борисов · первая межзвёздная комета · открыта в 2019 году', note: 'Открыл крымский астроном-любитель Геннадий Борисов на самодельном телескопе.' },
+    { id: 'atlas3i', name: '3I/ATLAS', kind: 'interstellar', q: 1.357, e: 6.14, i: 175.1, O: 322.2, w: 128.0, Tp: [2025, 10, 29], col: '#c8f0ff',
+      facts: 'Третий межзвёздный объект · открыт 1 июля 2025 года · скорость около 58 км/с вдали от Солнца',
+      note: 'Комета из другой звёздной системы. В конце октября 2025 года прошла перигелий между орбитами Земли и Марса.' },
   ];
   const STREAMS = [
     { name: 'Персеиды', parent: 'swift', when: [2026, 8, 12], col: '#9fd8ff' },
@@ -1372,6 +1430,13 @@
   const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
   function prepOrbit(o, seed) {
+    if (o.e > 1) {   // hyperbola: a < 0, mean motion from Gauss's constant
+      o.a = o.q / (1 - o.e);
+      Object.assign(o, { ci: Math.cos(o.i * DEG), si: Math.sin(o.i * DEG), cO: Math.cos(o.O * DEG), sO: Math.sin(o.O * DEG), wr: o.w * DEG,
+        n: 0.01720209895 / Math.pow(-o.a, 1.5), M0: 0, hyper: true });
+      o.M0 = -o.n * dj(...o.Tp);
+      return o;
+    }
     Object.assign(o, { ci: Math.cos(o.i * DEG), si: Math.sin(o.i * DEG), cO: Math.cos(o.O * DEG), sO: Math.sin(o.O * DEG), wr: o.w * DEG,
       n: TAU / (365.25 * Math.pow(o.a, 1.5)) });
     o.M0 = o.Tp ? -o.n * dj(...o.Tp) : ((Math.sin(seed * 12.9898) * 43758.5453) % 1 + 1) % 1 * TAU;
@@ -1383,6 +1448,13 @@
     return [r * (o.cO * cu - o.sO * su * o.ci), r * su * o.si, -r * (o.sO * cu + o.cO * su * o.ci)];
   }
   function keplerPos(o, d) {
+    if (o.hyper) {
+      const M = o.M0 + o.n * d;
+      let Hh = Math.asinh(M / o.e);
+      for (let k = 0; k < 30; k++) Hh -= (o.e * Math.sinh(Hh) - Hh - M) / (o.e * Math.cosh(Hh) - 1);
+      const nu = 2 * Math.atan(Math.sqrt((o.e + 1) / (o.e - 1)) * Math.tanh(Hh / 2));
+      return orbitPoint(o, o.a * (1 - o.e * Math.cosh(Hh)), nu);
+    }
     const M = ((o.M0 + o.n * d) % TAU + TAU) % TAU;
     let E = o.e < 0.8 ? M : Math.PI;
     for (let k = 0; k < 12; k++) E -= (E - o.e * Math.sin(E) - M) / (1 - o.e * Math.cos(E));
@@ -1443,12 +1515,15 @@
     ctx.lineWidth = 1;
     for (const o of SMALL) {
       if (o.kind === 'ast' && o !== focus && o.a > 2) continue;   // main-belt asteroids would just retrace the belt
-      ctx.strokeStyle = o === focus ? 'rgba(255,215,150,0.5)' : o.kind === 'comet' ? 'rgba(170,220,255,0.12)' : o.kind === 'probe' ? 'rgba(160,232,255,0.14)' : 'rgba(200,200,220,0.1)';
+      ctx.strokeStyle = o === focus ? 'rgba(255,215,150,0.5)' : o.kind === 'interstellar' ? 'rgba(255,170,130,0.22)' : o.kind === 'comet' ? 'rgba(170,220,255,0.12)' : o.kind === 'probe' ? 'rgba(160,232,255,0.14)' : 'rgba(200,200,220,0.1)';
       ctx.beginPath();
+      const lim = o.hyper ? Math.acos(-1 / o.e) * 0.985 : Math.PI;
+      let pen = false;
       for (let j = 0; j <= 180; j++) {
-        const nu = j / 180 * TAU, r = o.a * (1 - o.e * o.e) / (1 + o.e * Math.cos(nu));
+        const nu = -lim + j / 180 * 2 * lim, r = o.a * (1 - o.e * o.e) / (1 + o.e * Math.cos(nu));
+        if (r <= 0 || r > 120) { pen = false; continue; }
         const [x, y] = project(...squeeze(orbitPoint(o, r, nu)));
-        j ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true;
       }
       ctx.stroke();
     }
@@ -1466,7 +1541,7 @@
     for (const o of SMALL) {
       const [x, y, , k] = project(...o.wpos);
       o.sx = x; o.sy = y;
-      if (o.kind === 'comet') {
+      if (o.kind === 'comet' || (o.kind === 'interstellar' && o.id !== 'oumuamua')) {
         const r = Math.hypot(...o.au);
         if (r < 6) {   // the tail points away from the Sun and grows near perihelion
           const len = Math.min(1.4, 0.5 / Math.max(r, 0.3)) * 0.9, tip = squeeze(o.au.map(v => v * (1 + len)));
@@ -1507,7 +1582,7 @@
     ctx.textBaseline = 'middle';
     // asteroid names only once zoomed in; comets, dwarf planets and probes always
     const near = zoom > zoom0 * 1.8;
-    const rank = o => o === focus ? 0 : o.kind === 'comet' ? 1 : o.kind === 'dwarf' ? 2 : o.kind === 'probe' ? 3 : 4;
+    const rank = o => o === focus ? 0 : o.kind === 'interstellar' ? 1 : o.kind === 'comet' ? 1 : o.kind === 'dwarf' ? 2 : o.kind === 'probe' ? 3 : 4;
     const list = SMALL.filter(o => o === focus || o.kind !== 'ast' || near).sort((a, b) => rank(a) - rank(b));
     for (const o of list) {
       const label = o.name.toUpperCase(), w = ctx.measureText(label).width + 4, y = o.sy;
@@ -1515,7 +1590,7 @@
       if (x + w > W - 8) x = o.sx - o.sr - 5 - w;
       if (x < 4 || y < 0 || y > H || taken.some(r => x < r[0] + r[2] && x + w > r[0] && Math.abs(y - r[1]) < 12)) continue;
       taken.push([x, y, w]);
-      ctx.fillStyle = o === focus ? 'rgba(255,215,150,0.95)' : o.kind === 'comet' ? 'rgba(190,230,255,0.7)' : o.kind === 'probe' ? 'rgba(160,232,255,0.75)' : 'rgba(205,210,230,0.55)';
+      ctx.fillStyle = o === focus ? 'rgba(255,215,150,0.95)' : o.kind === 'interstellar' ? 'rgba(255,190,160,0.8)' : o.kind === 'comet' ? 'rgba(190,230,255,0.7)' : o.kind === 'probe' ? 'rgba(160,232,255,0.75)' : 'rgba(205,210,230,0.55)';
       ctx.fillText(label, x, y);
     }
     for (const st of STREAMS) {
@@ -1817,7 +1892,7 @@
     if (b && b.kind) {
       closeTarget = 0; pendingSel = undefined;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
-      focus = b; zoomTarget = zoom0 * (b.a < 3.5 ? 2.6 : 1.4);
+      focus = b; zoomTarget = zoom0 * (b.a > 0 && b.a < 3.5 ? 2.6 : 1.4);
       showInfo(b);
       hint.textContent = 'НАЖМИ «ОБЗОР», ЧТОБЫ ВЕРНУТЬСЯ';
       return;
