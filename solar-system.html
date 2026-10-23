@@ -109,7 +109,7 @@
     <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
     <button id="t-sky">Фон: скопление Девы</button>
   </div>
-  <div class="credit">Фоны: скопление галактик Девы, туманности Лагуна и Трёхраздельная, глубокое звёздное поле, снимки <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
+  <div class="credit">Фоны: скопление галактик Девы, туманности Лагуна и Трёхраздельная, <a href="https://rubinobservatory.org/gallery/image-releases/rubins-cosmos" target="_blank" rel="noopener">Rubin’s Cosmos</a>, снимки <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
 </div>
 
 <script>
@@ -179,7 +179,7 @@
   let skyMode = 'cluster';
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
   const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image() };
-  photos.field.src = 'img/rubin-star-field.jpg';
+  photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
   photos.nebula.src = 'img/rubin-trifid-lagoon.jpg';
@@ -1900,7 +1900,7 @@
   skyBtn.addEventListener('click', () => {
     const order = ['cluster', 'nebula', 'field'];
     skyMode = order[(order.indexOf(skyMode) + 1) % order.length];
-    skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: звёздное поле' }[skyMode];
+    skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: Rubin’s Cosmos' }[skyMode];
     resetStars();
   });
   const smallBtn = document.getElementById('t-small');
