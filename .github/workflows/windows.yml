@@ -1,4 +1,6 @@
-# Builds the Windows live-wallpaper package: stars_helper.exe + the offline www bundle + config.json.
+# Builds the Windows live-wallpaper package:
+#   StarsDesktop.exe (our own engine, desktop/engine) + stars_helper.exe (for Lively) + the offline www bundle + config.json.
+# A smoke test starts the engine on the runner's desktop and prints its log and a small screenshot (base64 PNG).
 # See desktop/README.md.
 name: Windows wallpaper
 
@@ -32,6 +34,13 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build StarsDesktop.exe
+        run: dotnet publish desktop/engine/StarsDesktop.csproj -c Release -o engine-out
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -45,12 +54,52 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item engine-out/StarsDesktop.exe out/
           Copy-Item dist/stars_helper.exe out/
           Copy-Item -Recurse www out/www
           Copy-Item desktop/config.json, desktop/README.md out/
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Smoke test on the runner desktop
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Copy-Item -Recurse out smoke
+          $cfg = Get-Content smoke/config.json -Raw | ConvertFrom-Json
+          $cfg.autostart = $false; $cfg.pause_battery = $false; $cfg.pause_remote = $false
+          $cfg | ConvertTo-Json | Set-Content smoke/config.json -Encoding utf8
+          $p = Start-Process smoke/StarsDesktop.exe -PassThru
+          Start-Sleep -Seconds 40
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $lit = 0; $n = 0
+          for ($x = 0; $x -lt $b.Width; $x += 16) { for ($y = 0; $y -lt $b.Height; $y += 16) {
+            $c = $bmp.GetPixel($x, $y); $n++; if (($c.R + $c.G + $c.B) -gt 60) { $lit++ } } }
+          "screen $($b.Width)x$($b.Height), lit samples $lit / $n, process alive: $(-not $p.HasExited)"
+          $small = New-Object System.Drawing.Bitmap 320, ([int](320 * $b.Height / $b.Width))
+          $g2 = [System.Drawing.Graphics]::FromImage($small)
+          $g2.InterpolationMode = 'HighQualityBicubic'
+          $g2.DrawImage($bmp, 0, 0, $small.Width, $small.Height)
+          $ms = New-Object System.IO.MemoryStream
+          $small.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+          "SCREENSHOT-BEGIN"; [Convert]::ToBase64String($ms.ToArray()); "SCREENSHOT-END"
+          $bmp.Save("$PWD/smoke.png")
+          "--- log ---"
+          Get-Content "$env:LOCALAPPDATA/StarsDesktop/log.txt" -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id }
 
       - uses: actions/upload-artifact@v4
         with:
           name: stars-wallpaper-windows
           path: out/
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-screenshot
+          path: smoke.png
+          if-no-files-found: ignore

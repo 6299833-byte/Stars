@@ -1,0 +1,116 @@
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using static StarsDesktop.Native;
+
+namespace StarsDesktop;
+
+// One borderless window per monitor, made a child of the desktop layer, showing the page in WebView2.
+sealed class WallpaperWindow : Form
+{
+    public Screen Screen { get; }
+    readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.Black };
+    bool ready;            // the page said {type:'ready'}
+    bool? sentPause;
+    public event Action<WallpaperWindow>? PageReady;
+
+    public WallpaperWindow(Screen screen)
+    {
+        Screen = screen;
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.Manual;
+        Bounds = screen.Bounds;
+        BackColor = Color.Black;
+        Text = "Stars wallpaper";
+        Controls.Add(web);
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= (int)(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);   // no Alt+Tab, never takes focus
+            return cp;
+        }
+    }
+
+    protected override bool ShowWithoutActivation => true;
+
+    public async Task StartAsync(CoreWebView2Environment env, string webRoot)
+    {
+        await web.EnsureCoreWebView2Async(env);
+        var core = web.CoreWebView2;
+        var st = core.Settings;
+        st.AreDefaultContextMenusEnabled = false;
+        st.AreDevToolsEnabled = false;
+        st.IsZoomControlEnabled = false;
+        st.IsStatusBarEnabled = false;
+        st.AreBrowserAcceleratorKeysEnabled = false;
+        st.IsPinchZoomEnabled = false;
+        st.IsSwipeNavigationEnabled = false;
+        // offline: the page and its images come from the www folder under a private host name
+        core.SetVirtualHostNameToFolderMapping("stars.local", webRoot, CoreWebView2HostResourceAccessKind.Allow);
+        core.WebMessageReceived += (_, e) =>
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(e.WebMessageAsJson);
+                if (doc.RootElement.TryGetProperty("type", out var t) && t.GetString() == "ready")
+                {
+                    Log.Write($"page ready on {Screen.DeviceName} {Screen.Bounds}: {e.WebMessageAsJson}");
+                    ready = true; sentPause = null;
+                    PageReady?.Invoke(this);
+                }
+            }
+            catch { }
+        };
+        core.ProcessFailed += (_, e) =>
+        {
+            Log.Write($"WebView2 process failed: {e.ProcessFailedKind}");
+            if (e.ProcessFailedKind is CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+                BeginInvoke(() => { ready = false; core.Reload(); });
+        };
+        // keep links on the wallpaper from navigating it away
+        core.NewWindowRequested += (_, e) => e.Handled = true;
+        core.Navigate("https://stars.local/index.html#wallpaper");
+    }
+
+    // Moves the window under the desktop icons, covering this monitor.
+    public void Attach(IntPtr layer)
+    {
+        var h = Handle;
+        var style = (long)GetWindowLongPtr(h, GWL_STYLE);
+        style = (style & ~0xC0000000L & ~0x00CF0000L) | WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;   // no popup, no frame
+        SetWindowLongPtr(h, GWL_STYLE, new IntPtr(style));
+        SetParent(h, layer);
+        // monitor rectangle (physical pixels, we are per-monitor DPI aware) in the layer's client coordinates
+        var b = Screen.Bounds;
+        var r = new RECT { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
+        MapWindowPoints(IntPtr.Zero, layer, ref r, 2);
+        // under Progman directly (fallback), stay below the icons
+        var after = ClassOf(layer) == "Progman" ? HWND_BOTTOM : IntPtr.Zero;
+        SetWindowPos(h, after, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
+            SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW | (after == IntPtr.Zero ? SWP_NOZORDER : 0));
+    }
+
+    public bool IsAttachedTo(IntPtr layer) => IsHandleCreated && GetParent(Handle) == layer && IsWindow(layer);
+
+    public void Post(string json)
+    {
+        if (ready && web.CoreWebView2 != null) web.CoreWebView2.PostWebMessageAsJson(json);
+    }
+
+    public void SetPaused(bool on)
+    {
+        if (!ready || sentPause == on) return;
+        sentPause = on;
+        Post(on ? "{\"type\":\"pause\",\"on\":true}" : "{\"type\":\"pause\",\"on\":false}");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) web.Dispose();
+        base.Dispose(disposing);
+    }
+}

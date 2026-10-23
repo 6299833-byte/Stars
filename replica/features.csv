@@ -1,0 +1,30 @@
+feature,area,priority,original,clone,notes
+Web page as wallpaper behind desktop icons,core,must,yes,yes (untested on Windows),WorkerW parenting; both originals
+Works on Windows 10 and 11 including 24H2 desktop layout,core,must,yes,yes (untested on Windows),24H2 moved WorkerW under Progman
+One wallpaper per monitor with correct size and DPI,core,must,yes,yes (untested on Windows),
+Re-attach after explorer.exe restart,core,must,yes,yes (untested on Windows),TaskbarCreated message
+Pause when a fullscreen app or game covers the monitor,performance,must,yes,yes (untested on Windows),
+Pause on lock screen and when the session is remote,performance,should,yes,yes (untested on Windows),
+Pause on battery (option),performance,should,yes,yes (untested on Windows),
+Frame-rate cap (30/60),performance,must,yes,yes (untested on Windows),
+Per-app rules (exe running -> pause or keep),performance,could,yes,yes (untested on Windows),Wallpaper Engine application rules
+Tray icon with pause/resume and exit,control,must,yes,yes (untested on Windows),
+Autostart with Windows,control,must,yes,yes (untested on Windows),HKCU Run
+Settings file applied without restart,control,should,yes,yes (untested on Windows),
+Span one wallpaper across all monitors,layout,could,yes,no,
+Offline: page and assets bundled locally,core,must,n/a,yes (untested on Windows),WebView2 virtual host
+Data bridge from engine to page (no local server),core,should,partial,yes (untested on Windows),WebView2 web messages
+System notifications feed from all apps,ours,must,no,yes,Windows notification store; allow/hide lists
+Privacy mode: sender only,ours,must,no,yes,
+Meetings from Outlook calendar (ICS),ours,must,no,yes,Ical.Net handles RRULE and Windows time zones
+Countdown to the next meeting,ours,should,no,yes,
+Now-playing media info on the wallpaper,ours,could,yes,no,Wallpaper Engine media integration
+Audio-reactive visuals,ours,could,yes,no,Wallpaper Engine audio listener
+Wallpaper library and preview,library,skip,yes,skip,one wallpaper only
+Workshop / store,library,skip,yes,skip,their network and content
+Wallpaper editor,library,skip,yes,skip,
+Video and GIF wallpapers,formats,skip,yes,skip,
+Scene wallpapers,formats,skip,yes,skip,
+Customisable wallpaper properties UI,control,should,yes,yes (untested on Windows),our settings file covers it
+Interaction with the wallpaper (mouse),control,could,yes,no,desktop clicks stay with the icons
+Pause when another app is maximised (option),performance,should,yes,yes (untested on Windows),

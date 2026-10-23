@@ -37,6 +37,8 @@ DEFAULTS = {
     "notification_hours": 12,  # how far back the feed goes
     "days_ahead": 7,
     "web_root": "",            # folder with index.html; default: ./www next to the helper, else the repo
+    "apps_only": [],           # show only these apps (keys or names, e.g. "whatsapp", "outlook"); empty: all apps
+    "apps_hide": ["windows"],  # never show these
 }
 
 
@@ -266,13 +268,50 @@ def wpn_path():
     return os.path.join(base, "Microsoft", "Windows", "Notifications", "wpndatabase.db")
 
 
+# Known apps: (key, name, substrings of the Windows app id, substrings of the toast for browser notifications)
+KNOWN_APPS = [
+    ("whatsapp", "WhatsApp", ("whatsapp",), ("web.whatsapp.com",)),
+    ("outlook", "Outlook", ("outlook", "olk"), ("outlook.office", "outlook.live", "outlook.cloud")),
+    ("teams", "Teams", ("teams",), ("teams.microsoft.com", "teams.live.com")),
+    ("telegram", "Telegram", ("telegram",), ("web.telegram.org",)),
+    ("gmail", "Gmail", (), ("mail.google.com",)),
+    ("slack", "Slack", ("slack",), ("app.slack.com",)),
+    ("discord", "Discord", ("discord",), ("discord.com",)),
+    ("viber", "Viber", ("viber",), ()),
+    ("skype", "Skype", ("skype",), ("web.skype.com",)),
+    ("zoom", "Zoom", ("zoom",), ("zoom.us",)),
+    ("calendar", "Календарь", ("windowscommunicationsapps", "calendar"), ()),
+    ("chrome", "Chrome", ("chrome",), ()),
+    ("edge", "Edge", ("msedge", "microsoftedge"), ()),
+    ("firefox", "Firefox", ("firefox", "308046b0af4a39cb"), ()),
+    ("windows", "Windows", ("windows.systemtoast", "microsoft.windows.", "windows.defender", "securityandmaintenance"), ()),
+]
+
+
 def classify(handler, payload):
-    h, low = (handler or "").lower(), payload.lower()
-    if "whatsapp" in h or "web.whatsapp.com" in low or "whatsapp" in low[:400]:
-        return "whatsapp"
-    if "outlook" in h or "olk" in h or "outlook.office" in low or "outlook.live" in low:
-        return "outlook"
-    return None
+    """Returns (key, display name) for any app; web notifications are named after the site."""
+    h = (handler or "").lower()
+    # browsers put the site in the attribution line; only that line is checked, never the message itself
+    site = " ".join(re.findall(r'placement="attribution"[^>]*>([^<]*)<', payload)).lower()
+    for key, name, ids, sites in KNOWN_APPS:      # site first: a browser toast from web.whatsapp.com is WhatsApp
+        if site and any(x in site for x in sites):
+            return key, name
+    for key, name, ids, sites in KNOWN_APPS:
+        if any(x in h for x in ids):
+            return key, name
+    # unknown app: a readable name from the app id, e.g. "Contoso.Notes_8wekyb3d8bbwe!App" -> "Notes"
+    base = h.split("!")[0].split("_")[0]
+    base = base.replace(".exe", "").rstrip("\\").split("\\")[-1].split(".")[-1] or "app"
+    key = re.sub(r"[^a-z0-9]+", "", base) or "app"
+    return key, base[:1].upper() + base[1:]
+
+
+def wanted(cfg, key, name):
+    names = {key, name.lower()}
+    if any(str(x).lower() in names for x in cfg.get("apps_hide") or []):
+        return False
+    only = [str(x).lower() for x in cfg.get("apps_only") or []]
+    return not only or bool(names & set(only))
 
 
 def toast_texts(payload):
@@ -312,18 +351,18 @@ def read_notifications(cfg, db_path=None):
     for payload, arrival, handler in rows:
         if isinstance(payload, bytes):
             payload = payload.decode("utf-8", "replace")
-        app = classify(handler, payload or "")
-        if not app:
+        app, app_name = classify(handler, payload or "")
+        if not wanted(cfg, app, app_name):
             continue
         when = dt.datetime(1601, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(microseconds=int(arrival or 0) / 10)
         if when < cutoff:
             break
-        texts = [t for t in toast_texts(payload) if "web.whatsapp.com" not in t.lower()]
+        texts = [t for t in toast_texts(payload) if not re.fullmatch(r"[\w.-]+\.[a-z]{2,}", t.lower())]   # drop bare site names
         if not texts:
             continue
         sender = texts[0]
         body = " ".join(texts[1:])[:160] if cfg.get("show_text", True) else ""
-        out.append({"app": app, "from": sender, "text": body, "time": when.isoformat()})
+        out.append({"app": app, "appName": app_name, "from": sender, "text": body, "time": when.isoformat()})
         if len(out) >= cfg.get("max_notifications", 12):
             break
     return out, None

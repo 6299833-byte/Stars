@@ -106,8 +106,8 @@
   .wall-next { font: italic 17px/1.3 var(--serif); color: var(--chip-on-line); }
   .wall-msg { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: start; animation: wall-in 0.6s ease-out; }
   .wall-msg i { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
-  .wall-msg i.whatsapp { background: #4fd18b; box-shadow: 0 0 10px #4fd18b; }
-  .wall-msg i.outlook { background: #4c9cff; box-shadow: 0 0 10px #4c9cff; }
+  .wall-msg i { background: var(--app); box-shadow: 0 0 10px var(--app); }
+  .wall-msg .app { font: 10.5px/1.3 var(--mono); color: var(--muted); margin-left: 6px; }
   .wall-msg b { font: 500 15px/1.25 var(--serif); }
   .wall-msg p { margin: 2px 0 0; font: 12px/1.4 var(--mono); color: var(--ink); opacity: 0.8; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .wall-msg time { font: 10.5px/1.4 var(--mono); color: var(--muted); white-space: nowrap; }
@@ -2481,8 +2481,9 @@
     b.texJob = textureJob(b, small ? 512 : 1024); texQueue.push(b);
   });
 
-  // ---------- wallpaper mode (#wallpaper): Lively Wallpaper on Windows with the Stars helper ----------
+  // ---------- wallpaper mode (#wallpaper): our StarsDesktop engine, or Lively Wallpaper with the Stars helper ----------
   const WALL = location.hash === '#wallpaper' || /[?&]wallpaper\b/.test(location.search);
+  let wallPaused = false, wallFrameMs = 32;
   if (WALL) {
     document.body.classList.add('wall');
     const wall = document.getElementById('wall'); wall.hidden = false;
@@ -2527,12 +2528,30 @@
       const ml = $('w-msgs'); ml.replaceChildren();
       for (const m of (feed.notifications || []).slice(0, 8)) {
         const key = m.time + m.from;
-        const body = tag('div'); body.append(tag('b', m.from)); if (m.text) body.append(tag('p', m.text));
-        const el = li('wall-msg', [tag('i', undefined, m.app), body, tag('time', ago(new Date(m.time)))]);
+        const head = tag('b', m.from); if (m.appName) head.append(tag('span', m.appName, 'app'));
+        const body = tag('div'); body.append(head); if (m.text) body.append(tag('p', m.text));
+        const dot = tag('i'); dot.style.setProperty('--app', appColor(m.app || m.appName || ''));
+        const el = li('wall-msg', [dot, body, tag('time', ago(new Date(m.time)))]);
         if (seen.has(key)) el.style.animation = 'none';
         seen.add(key); ml.append(el);
       }
       if (!(feed.notifications || []).length) ml.append(li('wall-note', [feed.notifications_error || 'Новых сообщений нет']));
+    }
+    // a colour per app: the well-known ones by brand hue, any other app by a stable hue from its name
+    const APP_COLORS = { whatsapp: '#4fd18b', outlook: '#4c9cff', teams: '#8b8cf7', telegram: '#3fb0e6', gmail: '#ff6b5e',
+      slack: '#e8b04a', discord: '#7d8cff', viber: '#a77ef0', skype: '#35b6f0', zoom: '#4f8dff', calendar: '#5ec8d8' };
+    const appColor = k => { if (APP_COLORS[k]) return APP_COLORS[k];
+      let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `hsl(${h % 360} 70% 66%)`; };
+    // StarsDesktop (our engine, WebView2) pushes the feed and pause state; Lively + stars_helper is polled instead
+    const host = window.chrome && window.chrome.webview;
+    if (host) {
+      host.addEventListener('message', e => {
+        const m = e.data || {};
+        if (m.type === 'feed') { feed = m; $('w-note').hidden = true; renderWall(); }
+        else if (m.type === 'pause') wallPaused = !!m.on;
+        else if (m.type === 'config') { if (m.fps > 0) wallFrameMs = 1000 / m.fps - 1; wall.hidden = m.panel === false; }
+      });
+      host.postMessage({ type: 'ready', gl: !!GLR, size: [innerWidth, innerHeight, devicePixelRatio] });
     }
     async function pull() {
       try {
@@ -2545,7 +2564,8 @@
       }
       renderWall();
     }
-    pull(); setInterval(pull, 15000); setInterval(renderWall, 20000);
+    if (!host) { pull(); setInterval(pull, 15000); }
+    renderWall(); setInterval(renderWall, 20000);
     // slow automatic tour: overview, then planets one by one, now and then the view beyond
     const tour = [null, 'earth', 'saturn', null, 'jupiter', 'mars', 'far', 'uranus', null, 'neptune', 'sun'];
     let ti = 0;
@@ -2562,7 +2582,8 @@
   let last = performance.now(), t = 0, lastDateStr = '', frameDt = 0, frameDays = 0;
   let lastDraw = 0;
   function frame(now) {
-    if (WALL && now - lastDraw < 32) { requestAnimationFrame(frame); return; }   // ~30 fps on the desktop
+    // on the desktop: ~30 fps, and nothing at all while a fullscreen app covers the wallpaper
+    if (WALL && (wallPaused || now - lastDraw < wallFrameMs)) { if (wallPaused) last = now; requestAnimationFrame(frame); return; }
     lastDraw = now;
     // rAF timestamps can predate the start time (e.g. a page opened in the background): never step time backwards
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
