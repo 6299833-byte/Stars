@@ -139,7 +139,8 @@
       © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом.</p>
     <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
     <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
-    <p><small>Поверхности планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
+    <p><b>Земля.</b> Дневное полушарие — снимок «Голубой шарик» (The Blue Marble), экипаж «Аполлона-17», 7 декабря 1972 года. NASA, общественное достояние. Обратная сторона нарисована.</p>
+    <p><small>Поверхности остальных планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
   </div>
 </section>
 
@@ -211,7 +212,8 @@
   const bgCanvas = document.createElement('canvas'), bgClose = document.createElement('canvas'), bgSun = document.createElement('canvas');
   let skyMode = 'cluster';
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
-  const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image() };
+  const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), earth: new Image() };
+  photos.earth.src = 'img/earth-apollo17.jpg';
   photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
@@ -1162,26 +1164,59 @@
     return t;
   }
 
+  // Earth's day side comes from the Apollo 17 "Blue Marble" (NASA, public domain): the photo shows the hemisphere
+  // centred near 26° S with south at the top; it is projected back onto the sphere and faded into the procedural globe
+  const EARTH_PHOTO = { lat0: -26 * DEG, cx: 512, cy: 512, r: 482 };
+  let earthPix;   // undefined: not tried yet, null: unavailable (not loaded or a file:// tainted canvas)
+  function earthPixels() {
+    if (earthPix !== undefined) return earthPix;
+    if (!ready(photos.earth)) return null;
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 1024;
+      const g = c.getContext('2d'); g.drawImage(photos.earth, 0, 0, 1024, 1024);
+      earthPix = g.getImageData(0, 0, 1024, 1024).data;
+    } catch (e) { earthPix = null; }
+    return earthPix;
+  }
+  function earthPhotoAt(x, y, z) {   // -> [r, g, b, weight] or null
+    const P = earthPixels(); if (!P) return null;
+    const s0 = Math.sin(EARTH_PHOTO.lat0), c0 = Math.cos(EARTH_PHOTO.lat0);
+    const cosc = x * c0 + y * s0;            // centre direction (c0, s0, 0)
+    if (cosc < 0.08) return null;
+    const u = -z, v = -x * s0 + y * c0;      // east and north on the disc (the globe spins toward -z, so east is -z)
+    const px = Math.round(EARTH_PHOTO.cx - u * EARTH_PHOTO.r), py = Math.round(EARTH_PHOTO.cy + v * EARTH_PHOTO.r);   // south is up
+    if (px < 0 || py < 0 || px > 1023 || py > 1023) return null;
+    const k = (py * 1024 + px) * 4;
+    return [P[k], P[k + 1], P[k + 2], smooth(clamp((cosc - 0.12) / 0.25, 0, 1))];
+  }
+
   // surface (+ city lights in alpha) and cloud maps, generated a few rows at a time so the page never stalls
   function textureJob(b, w) {
     const h = w / 2, surf = new Uint8Array(w * h * 4), cloud = b.id === 'earth' ? new Uint8Array(w * h * 4) : null;
     let row = 0;
+    const t0 = performance.now();
     return {
       step(deadline) {
+        // the high-resolution Earth waits briefly for its photo to load
+        if (cloud && row === 0 && w > 128 && !ready(photos.earth) && performance.now() - t0 < 5000) return false;
         while (row < h) {
           const lat = (0.5 - (row + 0.5) / h) * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
           for (let i = 0; i < w; i++) {
             const lon = ((i + 0.5) / w - 0.5) * TAU, x = cl * Math.cos(lon), z = cl * Math.sin(lon);
-            const c = surfaceColor(b, x, y, z, lat, lon), k = (row * w + i) * 4;
+            let c = surfaceColor(b, x, y, z, lat, lon);
+            const k = (row * w + i) * 4;
+            const ph = cloud ? earthPhotoAt(x, y, z) : null;
+            if (ph) c = mix(c, ph, ph[3]);
             surf[k] = c[0]; surf[k + 1] = c[1]; surf[k + 2] = c[2];
             surf[k + 3] = 0;
             if (cloud) {
-              if (c[1] > c[2] && Math.abs(lat) < 62 * DEG) {
+              const land = ph && ph[3] > 0.5 ? ph[0] > ph[2] + 6 && ph[0] + ph[1] + ph[2] < 560 : c[1] > c[2];
+              if (land && Math.abs(lat) < 62 * DEG) {
                 const f = fbm(x * 16 + 3, y * 16, z * 16, 3), sp = vnoise(x * 90, y * 90, z * 90);
                 surf[k + 3] = clamp((f - 0.56) * 5, 0, 1) * smooth(clamp((sp - 0.45) * 3, 0, 1)) * 210;
               }
               const f2 = fbm(x * 2.6 + 20, y * 4.2, z * 2.6, 5);
-              const cov = smooth(clamp((f2 - 0.5) / 0.16, 0, 1)) * 255;
+              const cov = smooth(clamp((f2 - 0.5) / 0.16, 0, 1)) * 255 * (ph ? 1 - ph[3] : 1);   // the photo has its own clouds
               cloud[k] = cloud[k + 1] = cloud[k + 2] = cov; cloud[k + 3] = 255;
             }
           }
