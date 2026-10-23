@@ -22,6 +22,24 @@ sealed class Settings
     [JsonPropertyName("show_panel")] public bool ShowPanel { get; set; } = true;
     [JsonPropertyName("autostart")] public bool Autostart { get; set; } = true;
     [JsonPropertyName("web_root")] public string WebRoot { get; set; } = "";
+    // one entry per monitor, counted from the left; missing entries get a different sky each
+    [JsonPropertyName("monitors")] public List<MonitorSettings> Monitors { get; set; } = new();
+
+    // monitors from left to right (then top to bottom), the order the "monitors" list uses
+    public static Screen[] Ordered() =>
+        Screen.AllScreens.OrderBy(s => s.Bounds.X).ThenBy(s => s.Bounds.Y).ToArray();
+
+    public MonitorSettings For(int index, Screen screen)
+    {
+        while (Monitors.Count <= index)
+        {
+            int i = Monitors.Count;
+            Monitors.Add(new MonitorSettings { Scene = MonitorSettings.Scenes[i % MonitorSettings.Scenes.Length].Key, Panel = null });
+        }
+        var m = Monitors[index];
+        m.Panel ??= screen.Primary;   // by default the clock and feed are on the main screen only
+        return m;
+    }
     [JsonExtensionData] public Dictionary<string, JsonElement>? Other { get; set; }   // keeps "port" and other helper keys
 
     static readonly JsonSerializerOptions Json = new()
@@ -64,6 +82,34 @@ sealed class Settings
             if (!string.IsNullOrEmpty(p) && File.Exists(System.IO.Path.Combine(p, "index.html"))) return System.IO.Path.GetFullPath(p);
         return System.IO.Path.Combine(Dir, "www");
     }
+}
+
+sealed class MonitorSettings
+{
+    [JsonPropertyName("scene")] public string Scene { get; set; } = "cluster";   // cluster | nebula | field | milkyway
+    [JsonPropertyName("view")] public string View { get; set; } = "tour";         // tour | overview | sun | mercury … neptune | far
+    [JsonPropertyName("panel")] public bool? Panel { get; set; }                 // clock, meetings, messages
+
+    public static readonly (string Key, string Name)[] Scenes =
+    {
+        ("cluster", "Скопление галактик Девы"),
+        ("nebula", "Туманности Лагуна и Трёхраздельная"),
+        ("field", "Rubin’s Cosmos (тысячи галактик)"),
+        ("milkyway", "Млечный Путь (вся галактика)"),
+    };
+
+    public static readonly (string Key, string Name)[] Views =
+    {
+        ("tour", "Облёт планет"), ("overview", "Вся система"), ("sun", "Солнце"), ("mercury", "Меркурий"), ("venus", "Венера"),
+        ("earth", "Земля"), ("mars", "Марс"), ("jupiter", "Юпитер"), ("saturn", "Сатурн"), ("uranus", "Уран"),
+        ("neptune", "Нептун"), ("far", "За пределами: соседние звёзды"),
+    };
+
+    public bool MilkyWay => Scene == "milkyway";
+
+    public string Url => MilkyWay
+        ? "https://stars.local/milky-way.html#wallpaper"
+        : $"https://stars.local/index.html#wallpaper&sky={Uri.EscapeDataString(Scene)}&view={Uri.EscapeDataString(View)}&panel={(Panel != false ? 1 : 0)}";
 }
 
 static class Log

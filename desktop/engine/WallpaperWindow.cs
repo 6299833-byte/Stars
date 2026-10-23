@@ -8,14 +8,19 @@ namespace StarsDesktop;
 sealed class WallpaperWindow : Form
 {
     public Screen Screen { get; }
+    public int Index { get; }                  // position from the left, 0-based
+    public MonitorSettings Monitor { get; private set; }
+    string page = "";                          // the page loaded now (solar system or Milky Way)
     readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.Black };
     bool ready;            // the page said {type:'ready'}
     bool? sentPause;
     public event Action<WallpaperWindow>? PageReady;
 
-    public WallpaperWindow(Screen screen)
+    public WallpaperWindow(Screen screen, int index, MonitorSettings monitor)
     {
         Screen = screen;
+        Index = index;
+        Monitor = monitor;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -73,7 +78,8 @@ sealed class WallpaperWindow : Form
         };
         // keep links on the wallpaper from navigating it away
         core.NewWindowRequested += (_, e) => e.Handled = true;
-        core.Navigate("https://stars.local/index.html#wallpaper");
+        page = Monitor.MilkyWay ? "milkyway" : "solar";
+        core.Navigate(Monitor.Url);
     }
 
     // Moves the window under the desktop icons, covering this monitor.
@@ -99,6 +105,29 @@ sealed class WallpaperWindow : Form
     public void Post(string json)
     {
         if (ready && web.CoreWebView2 != null) web.CoreWebView2.PostWebMessageAsJson(json);
+    }
+
+    // New choice for this screen: the solar-system page switches sky, view and panel live; the Milky Way is another page.
+    // Returns true when the page is reloaded (it will say "ready" again).
+    public bool Apply(MonitorSettings m)
+    {
+        Monitor = m;
+        var want = m.MilkyWay ? "milkyway" : "solar";
+        if (want == page || web.CoreWebView2 == null) return false;
+        page = want; ready = false;
+        web.CoreWebView2.Navigate(m.Url);
+        return true;
+    }
+
+    // "Screen 2 — in the middle, 2560×1440, main"
+    public string Title(int count)
+    {
+        var where = count == 1 ? "" : Index == 0 ? "слева" : Index == count - 1 ? "справа" : count == 3 ? "по центру" : $"{Index + 1}-й слева";
+        var parts = new List<string>();
+        if (where.Length > 0) parts.Add(where);
+        parts.Add($"{Screen.Bounds.Width}×{Screen.Bounds.Height}");
+        if (Screen.Primary) parts.Add("основной");
+        return $"Экран {Index + 1} — {string.Join(", ", parts)}";
     }
 
     public void SetPaused(bool on)

@@ -2,7 +2,9 @@
   "ics_url": "",
   "show_text": true,
   "apps_only": [],
-  "apps_hide": ["windows"],
+  "apps_hide": [
+    "windows"
+  ],
   "max_notifications": 12,
   "notification_hours": 12,
   "days_ahead": 7,
@@ -12,5 +14,6 @@
   "pause_battery": true,
   "pause_remote": true,
   "autostart": true,
-  "port": 8777
+  "port": 8777,
+  "monitors": []
 }

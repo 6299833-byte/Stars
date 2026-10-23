@@ -29,6 +29,8 @@
     font-family: var(--mono);
   }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  /* wallpaper mode (#wallpaper): only the galaxy and its labels */
+  body.wall .card, body.wall .bottom { display: none; }
   #labels { position: fixed; inset: 0; pointer-events: none; }
   .lbl {
     position: absolute; left: 0; top: 0;
@@ -418,10 +420,30 @@
   const scaleBar = document.getElementById('scale-bar');
   const KPC_PER_10K_LY = 10000 / 3261.56;
 
+  // ---------- wallpaper mode (#wallpaper): StarsDesktop on Windows ----------
+  const WALL = /^#wallpaper\b/.test(location.hash);
+  let wallPaused = false, wallFrameMs = 32, lastDraw = 0;
+  if (WALL) {
+    document.body.classList.add('wall');
+    const host = window.chrome && window.chrome.webview;
+    if (host) {
+      host.addEventListener('message', e => {
+        const m = e.data || {};
+        if (m.type === 'pause') wallPaused = !!m.on;
+        else if (m.type === 'config' && m.fps > 0) wallFrameMs = 1000 / m.fps - 1;
+      });
+      host.postMessage({ type: 'ready', gl: true, size: [innerWidth, innerHeight, devicePixelRatio] });
+    }
+  }
+
   // ---------- frame ----------
   let last = performance.now();
   function frame(now) {
+    if (WALL && (wallPaused || now - lastDraw < wallFrameMs)) { if (wallPaused) last = now; requestAnimationFrame(frame); return; }
+    lastDraw = now;
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    // on the desktop: rock between a top view and a low angle, about every five minutes
+    if (WALL) tilt = 0.75 + 0.45 * Math.sin(now / 1000 * 0.021);
     if (!pts.size) { rot += spinV; spinV *= 0.93; if (!paused) rot += dt * 0.03; }
     if (targetTilt !== null) { tilt += (targetTilt - tilt) * Math.min(1, dt * 4); if (Math.abs(targetTilt - tilt) < 0.001) targetTilt = null; }
 

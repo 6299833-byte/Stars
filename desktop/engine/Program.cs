@@ -24,7 +24,7 @@ sealed class Engine : ApplicationContext
 {
     Settings settings;
     readonly NotifyIcon tray;
-    readonly ToolStripMenuItem pauseItem, autostartItem, statusItem;
+    readonly ToolStripMenuItem pauseItem, autostartItem, statusItem, screensItem;
     readonly List<WallpaperWindow> windows = new();
     readonly PauseRules pause = new();
     readonly ShellWatcher shell;
@@ -51,6 +51,7 @@ sealed class Engine : ApplicationContext
         if (configError != null) Log.Write(configError);
 
         statusItem = new ToolStripMenuItem("Запуск…") { Enabled = false };
+        screensItem = new ToolStripMenuItem("Экраны") { Enabled = false };
         pauseItem = new ToolStripMenuItem("Пауза", null, (_, _) => { pause.UserPaused = !pause.UserPaused; pauseItem!.Checked = pause.UserPaused; ApplyPause(); });
         autostartItem = new ToolStripMenuItem("Запускать вместе с Windows", null, (_, _) => SetAutostart(!autostartItem!.Checked));
         var menu = new ContextMenuStrip();
@@ -58,6 +59,7 @@ sealed class Engine : ApplicationContext
         {
             statusItem,
             new ToolStripSeparator(),
+            screensItem,
             pauseItem,
             new ToolStripMenuItem("Обновить встречи и сообщения", null, (_, _) => { _ = RefreshCalendar(); RefreshNotes(); }),
             new ToolStripMenuItem("Перезапустить обои", null, (_, _) => _ = Rebuild()),
@@ -142,9 +144,11 @@ sealed class Engine : ApplicationContext
                 Log.Write("no index.html in " + root);
                 return;
             }
-            foreach (var screen in Screen.AllScreens)
+            var screens = Settings.Ordered();
+            for (int i = 0; i < screens.Length; i++)
             {
-                var w = new WallpaperWindow(screen);
+                var screen = screens[i];
+                var w = new WallpaperWindow(screen, i, settings.For(i, screen));
                 w.PageReady += OnPageReady;
                 w.Show();
                 w.Attach(layer);
@@ -152,6 +156,8 @@ sealed class Engine : ApplicationContext
                 await w.StartAsync(env, root);
             }
             statusItem.Text = $"Работает · мониторов: {windows.Count}";
+            BuildScreensMenu();
+            SaveQuietly();   // writes the "monitors" list, so config.json shows one entry per screen
         }
         catch (Exception e)
         {
@@ -161,9 +167,52 @@ sealed class Engine : ApplicationContext
         finally { rebuilding = false; }
     }
 
+    string ConfigJson(WallpaperWindow w) => JsonSerializer.Serialize(new
+    {
+        type = "config", fps = settings.Fps, sky = w.Monitor.Scene, view = w.Monitor.View,
+        panel = settings.ShowPanel && w.Monitor.Panel != false,
+    }, Json);
+
+    // Tray → Экраны → one submenu per monitor: background (which galaxy), view, panel.
+    void BuildScreensMenu()
+    {
+        screensItem.DropDownItems.Clear();
+        foreach (var w in windows)
+        {
+            var item = new ToolStripMenuItem(w.Title(windows.Count));
+            var m = w.Monitor;
+            var sky = new ToolStripMenuItem("Фон");
+            foreach (var (key, name) in MonitorSettings.Scenes)
+                sky.DropDownItems.Add(new ToolStripMenuItem(name, null, (_, _) => Change(w, x => x.Scene = key)) { Checked = m.Scene == key });
+            var view = new ToolStripMenuItem("Вид") { Enabled = !m.MilkyWay };
+            foreach (var (key, name) in MonitorSettings.Views)
+                view.DropDownItems.Add(new ToolStripMenuItem(name, null, (_, _) => Change(w, x => x.View = key)) { Checked = m.View == key });
+            var panel = new ToolStripMenuItem("Часы, встречи и сообщения", null, (_, _) => Change(w, x => x.Panel = x.Panel == false))
+                { Checked = m.Panel != false, Enabled = !m.MilkyWay };
+            item.DropDownItems.AddRange(new ToolStripItem[] { sky, view, panel });
+            screensItem.DropDownItems.Add(item);
+        }
+        screensItem.Enabled = windows.Count > 0;
+    }
+
+    void Change(WallpaperWindow w, Action<MonitorSettings> edit)
+    {
+        edit(w.Monitor);
+        SaveQuietly();
+        if (!w.Apply(w.Monitor)) w.Post(ConfigJson(w));
+        BuildScreensMenu();
+    }
+
+    void SaveQuietly()
+    {
+        configWatch.EnableRaisingEvents = false;
+        settings.Save();
+        configWatch.EnableRaisingEvents = true;
+    }
+
     void OnPageReady(WallpaperWindow w)
     {
-        w.Post(JsonSerializer.Serialize(new { type = "config", fps = settings.Fps, panel = settings.ShowPanel }, Json));
+        w.Post(ConfigJson(w));
         w.Post(JsonSerializer.Serialize(feed, Json));
         ApplyPause();
     }
@@ -228,7 +277,12 @@ sealed class Engine : ApplicationContext
         if (err != null) { Log.Write(err); return; }   // keep the old settings while the file is half-written
         var calendarChanged = s.IcsUrl != settings.IcsUrl || s.DaysAhead != settings.DaysAhead;
         settings = s;
-        foreach (var w in windows) w.Post(JsonSerializer.Serialize(new { type = "config", fps = s.Fps, panel = s.ShowPanel }, Json));
+        foreach (var w in windows)
+        {
+            var m = s.For(w.Index, w.Screen);
+            if (!w.Apply(m)) w.Post(ConfigJson(w));
+        }
+        BuildScreensMenu();
         lastNotes = DateTime.MinValue;
         RefreshNotes();
         if (calendarChanged) _ = RefreshCalendar();
@@ -252,7 +306,7 @@ sealed class Engine : ApplicationContext
             using var k = Registry.CurrentUser.CreateSubKey(RunKey);
             if (on) k.SetValue("StarsDesktop", $"\"{ExePath}\"");
             else k.DeleteValue("StarsDesktop", false);
-            if (settings.Autostart != on) { settings.Autostart = on; configWatch.EnableRaisingEvents = false; settings.Save(); configWatch.EnableRaisingEvents = true; }
+            if (settings.Autostart != on) { settings.Autostart = on; SaveQuietly(); }
         }
         catch (Exception e) { Log.Write("autostart: " + e.Message); }
         autostartItem.Checked = AutostartOn();

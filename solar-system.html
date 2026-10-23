@@ -395,7 +395,10 @@
     // the Sun's close-up sits in front of the Lagoon and Trifid nebulae
     if (ready(photos.nebula)) photoSky(bgSun, photos.nebula, 0.62, 0.55, 0.74);
     else { bgSun.width = bgCanvas.width; bgSun.height = bgCanvas.height; bgSun.getContext('2d').drawImage(bgCanvas, 0, 0); }
-    if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72);
+    // planet close-ups follow the chosen background, so each screen of a multi-monitor desktop keeps its own sky
+    const closePhoto = { cluster: [photos.spiral, 0.15, 0.3, 0.72], nebula: [photos.nebula, 0.3, 0.4, 0.9], field: [photos.field, 0.35, 0.6, 0.5] }[skyMode];
+    if (closePhoto && ready(closePhoto[0])) photoSky(bgClose, ...closePhoto);
+    else if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72);
     else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
   }
   addEventListener('resize', resize);
@@ -2359,9 +2362,13 @@
   skyBtn.addEventListener('click', () => {
     const order = ['cluster', 'nebula', 'field'];
     skyMode = order[(order.indexOf(skyMode) + 1) % order.length];
+    setSky(skyMode);
+  });
+  function setSky(mode) {
+    skyMode = mode;
     skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: Rubin’s Cosmos' }[skyMode];
     resetStars();
-  });
+  }
   const constBtn = document.getElementById('t-const');
   constBtn.addEventListener('click', () => { showConst = !showConst; constBtn.setAttribute('aria-pressed', String(showConst)); });
   const smallBtn = document.getElementById('t-small');
@@ -2482,7 +2489,7 @@
   });
 
   // ---------- wallpaper mode (#wallpaper): our StarsDesktop engine, or Lively Wallpaper with the Stars helper ----------
-  const WALL = location.hash === '#wallpaper' || /[?&]wallpaper\b/.test(location.search);
+  const WALL = /^#wallpaper\b/.test(location.hash) || /[?&]wallpaper\b/.test(location.search);
   let wallPaused = false, wallFrameMs = 32;
   if (WALL) {
     document.body.classList.add('wall');
@@ -2549,7 +2556,7 @@
         const m = e.data || {};
         if (m.type === 'feed') { feed = m; $('w-note').hidden = true; renderWall(); }
         else if (m.type === 'pause') wallPaused = !!m.on;
-        else if (m.type === 'config') { if (m.fps > 0) wallFrameMs = 1000 / m.fps - 1; wall.hidden = m.panel === false; }
+        else if (m.type === 'config') { if (m.fps > 0) wallFrameMs = 1000 / m.fps - 1; applyWall(m); }
       });
       host.postMessage({ type: 'ready', gl: !!GLR, size: [innerWidth, innerHeight, devicePixelRatio] });
     }
@@ -2568,12 +2575,20 @@
     renderWall(); setInterval(renderWall, 20000);
     // slow automatic tour: overview, then planets one by one, now and then the view beyond
     const tour = [null, 'earth', 'saturn', null, 'jupiter', 'mars', 'far', 'uranus', null, 'neptune', 'sun'];
-    let ti = 0;
-    const step = () => {
-      const id = tour[ti++ % tour.length];
-      choose(id === null ? null : id === 'far' ? FAR : BODIES.find(b => b.id === id));
-    };
-    setInterval(step, 50000);
+    const target = id => id === 'overview' || id === null ? null : id === 'far' ? FAR : BODIES.find(b => b.id === id);
+    let ti = 0, wallView = 'tour';
+    setInterval(() => { if (wallView === 'tour') choose(target(tour[ti++ % tour.length])); }, 50000);
+    // per-screen choice: background, view and panel, from #wallpaper&sky=nebula&view=saturn&panel=0
+    // or from StarsDesktop's {type:'config'} message (one wallpaper window per monitor)
+    function applyWall(o) {
+      if (['cluster', 'nebula', 'field'].includes(o.sky) && o.sky !== skyMode) setSky(o.sky);
+      if (o.view && o.view !== wallView && (o.view === 'tour' || o.view === 'overview' || o.view === 'far' || BODIES.some(b => b.id === o.view))) {
+        wallView = o.view;
+        choose(wallView === 'tour' ? null : target(wallView));
+      }
+      if (o.panel !== undefined) wall.hidden = o.panel === false || o.panel === '0' || o.panel === 'false';
+    }
+    applyWall(Object.fromEntries(new URLSearchParams(location.hash.replace(/^#wallpaper&?/, ''))));
     // drift around slowly instead of waiting for a finger
     setInterval(() => { vYaw = 0.0006; vcYaw = 0.0008; }, 1000);
   }

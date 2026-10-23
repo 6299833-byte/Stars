@@ -90,6 +90,8 @@ jobs:
           $small.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
           "SCREENSHOT-BEGIN"; [Convert]::ToBase64String($ms.ToArray()); "SCREENSHOT-END"
           $bmp.Save("$PWD/smoke.png")
+          "--- config.json after the run ---"
+          Get-Content smoke/config.json
           "--- log ---"
           Get-Content "$env:LOCALAPPDATA/StarsDesktop/log.txt" -ErrorAction SilentlyContinue
           if (-not $p.HasExited) { Stop-Process -Id $p.Id }

@@ -13,20 +13,24 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'fonts'), { recursive: true });
 cpSync(join(root, 'img'), join(out, 'img'), { recursive: true });
 
-// ---- page ----
-let page = readFileSync(join(root, 'solar-system.html'), 'utf8');
+// ---- pages ----
+// solar-system.html -> index.html; milky-way.html -> milky-way.html (a wallpaper scene on Windows)
 const gf = /<link[^>]+fonts\.googleapis\.com[^>]*>/g;
-const n = (page.match(gf) || []).length;
-if (n !== 1) fail(`expected exactly 1 Google Fonts <link> in solar-system.html, found ${n}`);
-page = page.replace(gf, '<link rel="stylesheet" href="fonts/fonts.css">');
-page = page.replace(/<link[^>]+fonts\.(gstatic|googleapis)\.com[^>]*>\s*/g, '');   // preconnects
-
-const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+function wrap(file) {
+  let page = readFileSync(join(root, file), 'utf8');
+  const n = (page.match(gf) || []).length;
+  if (n !== 1) fail(`expected exactly 1 Google Fonts <link> in ${file}, found ${n}`);
+  page = page.replace(gf, '<link rel="stylesheet" href="fonts/fonts.css">');
+  page = page.replace(/<link[^>]+fonts\.(gstatic|googleapis)\.com[^>]*>\s*/g, '');   // preconnects
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 </head><body>
 ${page}
 </body></html>
 `;
+}
+const pages = { 'index.html': wrap('solar-system.html'), 'milky-way.html': wrap('milky-way.html') };
+const html = pages['index.html'];
 
 // ---- fonts ----
 const fonts = [
@@ -51,18 +55,21 @@ for (const f of fonts) {
   if (f.license) copyFileSync(join(dir, 'LICENSE'), join(out, 'fonts', f.license));
 }
 writeFileSync(join(out, 'fonts', 'fonts.css'), css);
-writeFileSync(join(out, 'index.html'), html);
+for (const [name, text] of Object.entries(pages)) writeFileSync(join(out, name), text);
 
 // ---- checks ----
+for (const [name, html] of Object.entries(pages)) {
 const remote = [
   ...html.matchAll(/<(?:link|script|img|source|iframe|video|audio)\b[^>]*\b(?:href|src)\s*=\s*["']?(https?:\/\/[^"'\s>]+)/gi),
   ...html.matchAll(/url\(\s*["']?(https?:\/\/[^"')]+)/gi),
   ...html.matchAll(/@import\s+(?:url\()?\s*["']?(https?:\/\/[^"')\s;]+)/gi),
   ...html.matchAll(/\.src\s*=\s*["'](https?:\/\/[^"']+)/g),
 ].map(m => m[1]);
-if (remote.length) fail(`remote resources left in www/index.html:\n  ${[...new Set(remote)].join('\n  ')}`);
+if (remote.length) fail(`remote resources left in www/${name}:\n  ${[...new Set(remote)].join('\n  ')}`);
 const imgs = [...new Set([...html.matchAll(/img\/[\w.-]+\.(?:jpe?g|png|webp|svg|gif)/g)].map(m => m[0]))];
 const missing = imgs.filter(p => !existsSync(join(out, p)));
-if (missing.length) fail(`missing images: ${missing.join(', ')}`);
+if (missing.length) fail(`missing images in ${name}: ${missing.join(', ')}`);
+}
+const imgs = [...new Set([...html.matchAll(/img\/[\w.-]+\.(?:jpe?g|png|webp|svg|gif)/g)].map(m => m[0]))];
 
-console.log(`build-www: www/index.html (${(html.length / 1024).toFixed(0)} KB), ${imgs.length} images, ${fonts.length * subsets.length} font files`);
+console.log(`build-www: www/index.html (${(html.length / 1024).toFixed(0)} KB), milky-way.html, ${imgs.length} images, ${fonts.length * subsets.length} font files`);
