@@ -9,6 +9,7 @@
   "notification_hours": 12,
   "days_ahead": 7,
   "fps": 30,
+  "quality": "normal",
   "pause_fullscreen": true,
   "pause_maximised": false,
   "pause_battery": true,

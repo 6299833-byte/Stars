@@ -24,7 +24,7 @@ sealed class Engine : ApplicationContext
 {
     Settings settings;
     readonly NotifyIcon tray;
-    readonly ToolStripMenuItem pauseItem, autostartItem, statusItem, screensItem;
+    readonly ToolStripMenuItem pauseItem, autostartItem, statusItem, screensItem, qualityItem;
     readonly List<WallpaperWindow> windows = new();
     readonly PauseRules pause = new();
     readonly ShellWatcher shell;
@@ -52,6 +52,10 @@ sealed class Engine : ApplicationContext
 
         statusItem = new ToolStripMenuItem("Запуск…") { Enabled = false };
         screensItem = new ToolStripMenuItem("Экраны") { Enabled = false };
+        qualityItem = new ToolStripMenuItem("Качество");
+        foreach (var (key, fps, name) in Qualities)
+            qualityItem.DropDownItems.Add(new ToolStripMenuItem(name, null, (_, _) => SetQuality(key, fps)) { Tag = key + "/" + fps });
+        MarkQuality();
         pauseItem = new ToolStripMenuItem("Пауза", null, (_, _) => { pause.UserPaused = !pause.UserPaused; pauseItem!.Checked = pause.UserPaused; ApplyPause(); });
         autostartItem = new ToolStripMenuItem("Запускать вместе с Windows", null, (_, _) => SetAutostart(!autostartItem!.Checked));
         var menu = new ContextMenuStrip();
@@ -60,6 +64,7 @@ sealed class Engine : ApplicationContext
             statusItem,
             new ToolStripSeparator(),
             screensItem,
+            qualityItem,
             pauseItem,
             new ToolStripMenuItem("Обновить встречи и сообщения", null, (_, _) => { _ = RefreshCalendar(); RefreshNotes(); }),
             new ToolStripMenuItem("Перезапустить обои", null, (_, _) => _ = Rebuild()),
@@ -109,7 +114,9 @@ sealed class Engine : ApplicationContext
             var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StarsDesktop", "WebView2");
             var opts = new CoreWebView2EnvironmentOptions(
                 // the window sits behind the icons, so Chromium must not treat it as hidden and stop drawing
-                "--disable-features=CalculateNativeWinOcclusion --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required");
+                "--disable-features=CalculateNativeWinOcclusion --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required " +
+                // draw on the discrete graphics card (Direct3D 11 through ANGLE) rather than the integrated one, also on GPUs Chromium is unsure of
+                "--force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy");
             env = await CoreWebView2Environment.CreateAsync(null, data, opts);
         }
         catch (Exception e)
@@ -153,7 +160,7 @@ sealed class Engine : ApplicationContext
                 w.Show();
                 w.Attach(layer);
                 windows.Add(w);
-                await w.StartAsync(env, root);
+                await w.StartAsync(env, root, settings.Quality);
             }
             statusItem.Text = $"Работает · мониторов: {windows.Count}";
             BuildScreensMenu();
@@ -199,8 +206,31 @@ sealed class Engine : ApplicationContext
     {
         edit(w.Monitor);
         SaveQuietly();
-        if (!w.Apply(w.Monitor)) w.Post(ConfigJson(w));
+        if (!w.Apply(w.Monitor, settings.Quality)) w.Post(ConfigJson(w));
         BuildScreensMenu();
+    }
+
+    static readonly (string Key, int Fps, string Name)[] Qualities =
+    {
+        ("normal", 30, "Обычное — 30 кадров/с (ноутбук)"),
+        ("normal", 60, "Плавное — 60 кадров/с"),
+        ("ultra", 60, "Максимальное — 60 кадров/с, ×1,5 разрешение, ×3 частиц, 2K-текстуры"),
+    };
+
+    void MarkQuality()
+    {
+        foreach (ToolStripMenuItem i in qualityItem.DropDownItems)
+            i.Checked = (string?)i.Tag == (settings.Quality == "ultra" ? "ultra" : "normal") + "/" + settings.Fps;
+        var gpu = windows.Select(w => w.Gpu).FirstOrDefault(g => g.Length > 0);
+        qualityItem.ToolTipText = gpu != null ? "Видеокарта: " + gpu : null;
+    }
+
+    void SetQuality(string key, int fps)
+    {
+        settings.Quality = key; settings.Fps = fps;
+        SaveQuietly();
+        foreach (var w in windows) if (!w.Apply(w.Monitor, key)) w.Post(ConfigJson(w));
+        MarkQuality();
     }
 
     void SaveQuietly()
@@ -212,6 +242,7 @@ sealed class Engine : ApplicationContext
 
     void OnPageReady(WallpaperWindow w)
     {
+        MarkQuality();
         w.Post(ConfigJson(w));
         w.Post(JsonSerializer.Serialize(feed, Json));
         ApplyPause();
@@ -280,9 +311,10 @@ sealed class Engine : ApplicationContext
         foreach (var w in windows)
         {
             var m = s.For(w.Index, w.Screen);
-            if (!w.Apply(m)) w.Post(ConfigJson(w));
+            if (!w.Apply(m, s.Quality)) w.Post(ConfigJson(w));
         }
         BuildScreensMenu();
+        MarkQuality();
         lastNotes = DateTime.MinValue;
         RefreshNotes();
         if (calendarChanged) _ = RefreshCalendar();

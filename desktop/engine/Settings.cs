@@ -14,6 +14,7 @@ sealed class Settings
     [JsonPropertyName("notification_hours")] public double NotificationHours { get; set; } = 12;
     [JsonPropertyName("days_ahead")] public int DaysAhead { get; set; } = 7;
     [JsonPropertyName("fps")] public int Fps { get; set; } = 30;
+    [JsonPropertyName("quality")] public string Quality { get; set; } = "normal";   // normal | ultra (strong graphics card)
     [JsonPropertyName("pause_fullscreen")] public bool PauseFullscreen { get; set; } = true;
     [JsonPropertyName("pause_maximised")] public bool PauseMaximised { get; set; } = false;
     [JsonPropertyName("pause_battery")] public bool PauseBattery { get; set; } = true;
@@ -107,9 +108,10 @@ sealed class MonitorSettings
 
     public bool MilkyWay => Scene == "milkyway";
 
-    public string Url => MilkyWay
+    public string Url(string quality) => MilkyWay
         ? "https://stars.local/milky-way.html#wallpaper"
-        : $"https://stars.local/index.html#wallpaper&sky={Uri.EscapeDataString(Scene)}&view={Uri.EscapeDataString(View)}&panel={(Panel != false ? 1 : 0)}";
+        : $"https://stars.local/index.html#wallpaper&sky={Uri.EscapeDataString(Scene)}&view={Uri.EscapeDataString(View)}&panel={(Panel != false ? 1 : 0)}"
+          + (quality == "ultra" ? "&q=ultra" : "");
 }
 
 static class Log

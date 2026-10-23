@@ -10,7 +10,8 @@ sealed class WallpaperWindow : Form
     public Screen Screen { get; }
     public int Index { get; }                  // position from the left, 0-based
     public MonitorSettings Monitor { get; private set; }
-    string page = "";                          // the page loaded now (solar system or Milky Way)
+    string page = "";                          // the page loaded now: "solar" or "milkyway", plus the quality
+    public string Gpu { get; private set; } = "";
     readonly WebView2 web = new() { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.Black };
     bool ready;            // the page said {type:'ready'}
     bool? sentPause;
@@ -42,7 +43,7 @@ sealed class WallpaperWindow : Form
 
     protected override bool ShowWithoutActivation => true;
 
-    public async Task StartAsync(CoreWebView2Environment env, string webRoot)
+    public async Task StartAsync(CoreWebView2Environment env, string webRoot, string quality)
     {
         await web.EnsureCoreWebView2Async(env);
         var core = web.CoreWebView2;
@@ -65,6 +66,7 @@ sealed class WallpaperWindow : Form
                 {
                     Log.Write($"page ready on {Screen.DeviceName} {Screen.Bounds}: {e.WebMessageAsJson}");
                     ready = true; sentPause = null;
+                    if (doc.RootElement.TryGetProperty("gpu", out var g) && g.ValueKind == System.Text.Json.JsonValueKind.String) Gpu = g.GetString() ?? "";
                     PageReady?.Invoke(this);
                 }
             }
@@ -78,8 +80,8 @@ sealed class WallpaperWindow : Form
         };
         // keep links on the wallpaper from navigating it away
         core.NewWindowRequested += (_, e) => e.Handled = true;
-        page = Monitor.MilkyWay ? "milkyway" : "solar";
-        core.Navigate(Monitor.Url);
+        page = PageKey(Monitor, quality);
+        core.Navigate(Monitor.Url(quality));
     }
 
     // Moves the window under the desktop icons, covering this monitor.
@@ -109,15 +111,18 @@ sealed class WallpaperWindow : Form
 
     // New choice for this screen: the solar-system page switches sky, view and panel live; the Milky Way is another page.
     // Returns true when the page is reloaded (it will say "ready" again).
-    public bool Apply(MonitorSettings m)
+    public bool Apply(MonitorSettings m, string quality)
     {
         Monitor = m;
-        var want = m.MilkyWay ? "milkyway" : "solar";
+        var want = PageKey(m, quality);
         if (want == page || web.CoreWebView2 == null) return false;
         page = want; ready = false;
-        web.CoreWebView2.Navigate(m.Url);
+        web.CoreWebView2.Navigate(m.Url(quality));
         return true;
     }
+
+    // the page has to be reloaded when this changes (particle counts and textures are made at start)
+    static string PageKey(MonitorSettings m, string quality) => m.MilkyWay ? "milkyway" : "solar-" + quality;
 
     // "Screen 2 — in the middle, 2560×1440, main"
     public string Title(int count)
