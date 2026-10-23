@@ -66,7 +66,7 @@ The page uses the same feed shape as `desktop/stars_helper.py`, so it works with
 
 | step | state | notes |
 | --- | --- | --- |
-| 1. vertical slice | written | `desktop/engine`: Program, DesktopLayer, WallpaperWindow; no Windows here, built and smoke-tested in GitHub Actions |
+| 1. vertical slice | done | builds in GitHub Actions; on the Windows Server 2025 runner (24H2 desktop layout) the page runs behind the icons with WebGL on, per the smoke-test log and screenshot |
 | 2. must-haves | written | all monitors, fullscreen pause per monitor, fps from config, HKCU autostart, feed for all apps, `show_text` |
 | 3. should-haves | written | lock / remote / battery pause, `config.json` hot reload, `pause_maximised`, `pause_apps` |
 | 4. could-haves | not started | spanning, media, audio |

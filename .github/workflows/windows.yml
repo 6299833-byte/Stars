@@ -69,7 +69,9 @@ jobs:
           $cfg.autostart = $false; $cfg.pause_battery = $false; $cfg.pause_remote = $false
           $cfg | ConvertTo-Json | Set-Content smoke/config.json -Encoding utf8
           $p = Start-Process smoke/StarsDesktop.exe -PassThru
-          Start-Sleep -Seconds 40
+          Start-Sleep -Seconds 30
+          (New-Object -ComObject Shell.Application).MinimizeAll()   # show the desktop
+          Start-Sleep -Seconds 8
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -79,10 +81,11 @@ jobs:
           for ($x = 0; $x -lt $b.Width; $x += 16) { for ($y = 0; $y -lt $b.Height; $y += 16) {
             $c = $bmp.GetPixel($x, $y); $n++; if (($c.R + $c.G + $c.B) -gt 60) { $lit++ } } }
           "screen $($b.Width)x$($b.Height), lit samples $lit / $n, process alive: $(-not $p.HasExited)"
-          $small = New-Object System.Drawing.Bitmap 320, ([int](320 * $b.Height / $b.Width))
+          $small = New-Object System.Drawing.Bitmap 512, ([int](512 * $b.Height / $b.Width))
           $g2 = [System.Drawing.Graphics]::FromImage($small)
           $g2.InterpolationMode = 'HighQualityBicubic'
           $g2.DrawImage($bmp, 0, 0, $small.Width, $small.Height)
+          "page ready count: $((Select-String -Path "$env:LOCALAPPDATA/StarsDesktop/log.txt" -Pattern 'page ready').Count)"
           $ms = New-Object System.IO.MemoryStream
           $small.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
           "SCREENSHOT-BEGIN"; [Convert]::ToBase64String($ms.ToArray()); "SCREENSHOT-END"
