@@ -73,6 +73,13 @@
     padding: 9px 12px; cursor: pointer;
     display: inline-flex; align-items: center; gap: 7px;
   }
+  .credit {
+    font: 9px/1.4 var(--mono); letter-spacing: 0.04em; color: var(--muted); text-align: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    pointer-events: auto; text-shadow: 0 0 6px var(--space);
+  }
+  .credit a { color: inherit; }
   .row button[aria-pressed="true"] { background: var(--chip-on); border-color: var(--chip-on-line); }
   .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   button:focus-visible { outline: 2px solid var(--chip-on-line); outline-offset: 2px; }
@@ -101,6 +108,7 @@
     <button id="t-names" aria-pressed="true">Названия</button>
     <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
   </div>
+  <div class="credit">Фон: скопление галактик Девы, снимки <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></div>
 </div>
 
 <script>
@@ -166,7 +174,24 @@
     resetStars();
   }
   const stars = [];
-  const bgCanvas = document.createElement('canvas');
+  const bgCanvas = document.createElement('canvas'), bgClose = document.createElement('canvas');
+  // Rubin Observatory images of the Virgo Cluster (CC BY 4.0, credited on the page); procedural sky until they load
+  const photos = { cluster: new Image(), spiral: new Image() };
+  photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
+  photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
+  for (const k in photos) photos[k].onload = () => resetStars();
+  const ready = im => im.complete && im.naturalWidth > 0;
+  // draws a photo to cover the screen around a focus point, darkened most where the planets sit
+  function photoSky(c, im, fxp, fyp, dim) {
+    c.width = W * DPR; c.height = H * DPR;
+    const g = c.getContext('2d');
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+    g.drawImage(im, clamp(W / 2 - fxp * w, W - w, 0), clamp(H / 2 - fyp * h, H - h, 0), w, h);
+    const v = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, Math.max(W, H) * 0.75);
+    v.addColorStop(0, `rgba(2,3,9,${dim})`); v.addColorStop(1, `rgba(2,3,9,${dim * 0.45})`);
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+  }
   function resetStars() {
     stars.length = 0;
     for (let i = 0; i < W * H / 3500; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.15 ? 1.4 : 0.8, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
@@ -251,6 +276,9 @@
       }
     }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    if (ready(photos.cluster)) photoSky(bgCanvas, photos.cluster, 0.3, 0.45, 0.6);
+    if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.6, 0.62, 0.5);
+    else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
   }
   addEventListener('resize', resize);
   resize();
@@ -1997,7 +2025,7 @@
     };
     if (closeK < 1) { drawStars(1); drawOverview(closeK > 0 ? 0 : dDays); }
     if (closeK > 0 && sel) {
-      ctx.globalAlpha = e; ctx.drawImage(bgCanvas, 0, 0, W, H); ctx.globalAlpha = 1;
+      ctx.globalAlpha = e; ctx.drawImage(bgClose, 0, 0, W, H); ctx.globalAlpha = 1;
       drawStars(e);
       closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
       // the close-up grows out of the body's spot in the overview
