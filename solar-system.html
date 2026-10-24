@@ -197,7 +197,7 @@
     <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
     <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
     <p><b>Луна.</b> Восточные три четверти видимой стороны — «минеральная Луна» астрофотографа, используется с разрешения автора: цвета усилены, синие моря богаты титаном, рыжие — железом. Западный край дорисован по карте морей и кратеров в тех же тонах.</p>
-    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Восточная часть Тихого океана и Северная Америка — снимок с «Аполлона» в обработке Тоби Орда (tobyord.com/earth). Западная часть Тихого океана заполнена облаками и морем с соседнего снимка. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
+    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Америки — «Голубой шарик» 2012 года со спутника Suomi NPP (NASA, общественное достояние); восточная часть Тихого океана — снимок с «Аполлона» в обработке Тоби Орда (tobyord.com/earth). Западная часть Тихого океана заполнена облаками и морем с соседнего снимка. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
     <p><small>Поверхности остальных планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
   </div>
 </section>
@@ -288,8 +288,8 @@
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
   const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), cliffs: new Image(), earth: new Image() };
   photos.earth.src = 'img/earth-apollo17.jpg';
-  const earthIndian = new Image(), earthAtlantic = new Image(), earthPacific = new Image();
-  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg'; earthPacific.src = 'img/earth-apollo-pacific.jpg';
+  const earthIndian = new Image(), earthAtlantic = new Image(), earthPacific = new Image(), earthAmericas = new Image();
+  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg'; earthPacific.src = 'img/earth-apollo-pacific.jpg'; earthAmericas.src = 'img/earth-bm2012-americas.jpg';
   photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
@@ -1925,6 +1925,9 @@
     // the eastern Pacific and North America from an Apollo photograph (NASA; restored by Toby Ord, tobyord.com/earth),
     // camera fitted to Florida, Cuba, Baja California, the Gulf of California, Texas and Yucatán (rms ≈ 2°)
     { im: earthPacific, n: 1024, cx: 512.6, cy: 512.2, r: 510.9, lat0: 32.99, lon0: -111.13, rho: 20.92, D: 6.45, east: 0.6 },
+    // NASA's Blue Marble 2012 (Suomi NPP VIIRS, public domain): the Americas fully lit, the sharpest of the set, so it
+    // outweighs the others where they overlap; camera fitted to Baja California, the Salton Sea, Florida and Cuba (rms ≈ 0.6°)
+    { im: earthAmericas, n: 1024, cx: 511.94, cy: 511.83, r: 511.94, lat0: 20.78, lon0: -100.10, rho: -0.11, D: 1.334, east: 2, k: 10 },
   ];
   for (const q of EARTH_PHOTOS) {   // camera basis: centre c, image right a, image up b
     const p0 = q.lat0 * DEG, l0 = q.lon0 * DEG, ro = q.rho * DEG;
@@ -1961,8 +1964,8 @@
       // fade toward the limb (haze, foreshortening) and away from the photo's own night side
       const wt = smooth(clamp((w - lim - 0.1) / 0.3, 0, 1)) * (1 - smooth(clamp((xn - q.east) / 0.25, 0, 1)));
       if (wt <= 0) continue;
-      const i = (py * q.n + px) * 4;
-      R += P[i] * wt; G += P[i + 1] * wt; B += P[i + 2] * wt; Wt += wt; Wmax = Math.max(Wmax, wt);
+      const i = (py * q.n + px) * 4, wk = wt * (q.k || 1);
+      R += P[i] * wk; G += P[i + 1] * wk; B += P[i + 2] * wk; Wt += wk; Wmax = Math.max(Wmax, wt);
     }
     return Wt > 0 ? [R / Wt, G / Wt, B / Wt, Wmax] : null;
   }
