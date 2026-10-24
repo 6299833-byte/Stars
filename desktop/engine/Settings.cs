@@ -89,7 +89,7 @@ sealed class Settings
 
 sealed class MonitorSettings
 {
-    [JsonPropertyName("scene")] public string Scene { get; set; } = "cluster";   // cluster | nebula | field | milkyway
+    [JsonPropertyName("scene")] public string Scene { get; set; } = "cluster";   // cluster | nebula | field | cliffs | milkyway
     [JsonPropertyName("view")] public string View { get; set; } = "tour";         // tour | overview | sun | mercury … neptune | far
     [JsonPropertyName("panel")] public bool? Panel { get; set; }                 // clock, meetings, messages
 
@@ -98,6 +98,7 @@ sealed class MonitorSettings
         ("cluster", "Скопление галактик Девы"),
         ("nebula", "Туманности Лагуна и Трёхраздельная"),
         ("field", "Rubin’s Cosmos (тысячи галактик)"),
+        ("cliffs", "Космические утёсы (телескоп «Уэбб»)"),
         ("milkyway", "Млечный Путь (вся галактика)"),
     };
 
