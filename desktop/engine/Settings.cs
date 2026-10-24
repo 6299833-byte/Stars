@@ -21,6 +21,8 @@ sealed class Settings
     [JsonPropertyName("pause_remote")] public bool PauseRemote { get; set; } = true;
     [JsonPropertyName("pause_apps")] public List<string> PauseApps { get; set; } = new();   // exe names, e.g. "obs64.exe"
     [JsonPropertyName("show_panel")] public bool ShowPanel { get; set; } = true;
+    [JsonPropertyName("ufo")] public bool Ufo { get; set; } = true;            // rare UFO easter egg
+    [JsonPropertyName("meteors")] public bool Meteors { get; set; } = true;    // falling meteors
     [JsonPropertyName("autostart")] public bool Autostart { get; set; } = true;
     [JsonPropertyName("web_root")] public string WebRoot { get; set; } = "";
     // one entry per monitor, counted from the left; missing entries get a different sky each

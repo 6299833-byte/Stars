@@ -16,5 +16,7 @@
   "pause_remote": true,
   "autostart": true,
   "port": 8777,
-  "monitors": []
+  "monitors": [],
+  "ufo": true,
+  "meteors": true
 }

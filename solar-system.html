@@ -181,6 +181,8 @@
         <button id="t-names" aria-pressed="false">Названия: скрыть</button>
         <button id="t-small" aria-pressed="true">Астероиды и кометы</button>
         <button id="t-const" aria-pressed="true">Созвездия</button>
+        <button id="t-ufo" aria-pressed="true">НЛО</button>
+        <button id="t-met" aria-pressed="true" title="Метеоры — частицы пыли сгорают на высоте 70–120 км">Метеоры</button>
         <button id="t-sky">Фон: скопление Девы</button>
       </div>
     </div>
@@ -251,6 +253,12 @@
   let W, H, DPR, zoom0, zoom, zoomTarget = 0, small;
   // #…&q=ultra (StarsDesktop's top quality on a strong graphics card): 1.5× supersampling, 3× ring particles, 2K textures
   const ULTRA = /[#&]q=ultra\b/.test(location.hash);
+  // rare sky events (UFOs, meteors): state lives up here because applyWall()/choose() touch it during start-up
+  const FX_ON = !reduce, FX_WALL = /^#wallpaper\b/.test(location.hash) || /[?&]wallpaper\b/.test(location.search);
+  const UFO_FORCE = (location.hash.match(/[#&]ufo=(orb|tictac|triangle|saucer|cube|gimbal)\b/) || [])[1];
+  const MET_TEST = /[#&]meteors=test\b/.test(location.hash);
+  let showUfo = FX_ON && !/[#&]ufo=0\b/.test(location.hash), ufo = null;
+  let showMeteors = FX_ON && !/[#&]meteors=0\b/.test(location.hash);
   function resize() {
     DPR = ULTRA ? Math.min((devicePixelRatio || 1) * 1.5, 3) : Math.min(devicePixelRatio || 1, 2);
     W = cv.clientWidth; H = cv.clientHeight;
@@ -297,15 +305,22 @@
     clean.set(im, out); return out;
   }
   // draws a photo to cover the screen around a focus point, darkened most where the planets sit
-  function photoSky(c, im, fxp, fyp, dim) {
+  function photoSky(c, im, fxp, fyp, dim, hole) {
     c.width = W * DPR; c.height = H * DPR;
     const g = c.getContext('2d');
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
     g.drawImage(im === photos.spiral ? untrail(im) : im, clamp(W / 2 - fxp * w, W - w, 0), clamp(H / 2 - fyp * h, H - h, 0), w, h);
-    const v = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, Math.max(W, H) * 0.75);
-    v.addColorStop(0, `rgba(2,3,9,${dim})`); v.addColorStop(1, `rgba(2,3,9,${dim * 0.45})`);
+    g.globalCompositeOperation = 'saturation'; g.fillStyle = 'rgba(128,128,128,0.22)'; g.fillRect(0, 0, W, H);   // tame the photo's colour
+    g.globalCompositeOperation = 'source-over';
+    const v = g.createRadialGradient(W / 2, H * 0.52, 0, W / 2, H * 0.52, Math.hypot(W, H) / 2);
+    v.addColorStop(0, `rgba(2,3,9,${dim})`); v.addColorStop(0.45, `rgba(2,3,9,${dim * 0.55})`); v.addColorStop(1, `rgba(2,3,9,${Math.min(0.9, dim + 0.15)})`);
     g.fillStyle = v; g.fillRect(0, 0, W, H);
+    if (hole) {   // a darker pocket where the close-up body sits, so its limb and night side never sink into a bright galaxy
+      const pr = Math.min(W, H) * 0.34, hg = g.createRadialGradient(W / 2, H * 0.52, pr, W / 2, H * 0.52, pr * 2.2);
+      hg.addColorStop(0, 'rgba(2,3,9,0.55)'); hg.addColorStop(1, 'rgba(2,3,9,0)');
+      g.fillStyle = hg; g.fillRect(0, 0, W, H);
+    }
   }
   function resetStars() {
     stars.length = 0;
@@ -399,8 +414,8 @@
     else { bgSun.width = bgCanvas.width; bgSun.height = bgCanvas.height; bgSun.getContext('2d').drawImage(bgCanvas, 0, 0); }
     // planet close-ups follow the chosen background, so each screen of a multi-monitor desktop keeps its own sky
     const closePhoto = { cluster: [photos.spiral, 0.15, 0.3, 0.72], nebula: [photos.nebula, 0.3, 0.4, 0.9], field: [photos.field, 0.35, 0.6, 0.5] }[skyMode];
-    if (closePhoto && ready(closePhoto[0])) photoSky(bgClose, ...closePhoto);
-    else if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72);
+    if (closePhoto && ready(closePhoto[0])) photoSky(bgClose, ...closePhoto, true);
+    else if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72, true);
     else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
   }
   addEventListener('resize', resize);
@@ -427,7 +442,7 @@
       rot: 0.99726958, spin0: 100.46, tiltAx: 23.44, p1: 0.0586, halo: '120,180,255',
       facts: 'Диаметр 12 742 км · 1 а. е. = 150 млн км · год 365,25 дня · сутки 23 ч 56 мин · наклон оси 23,4° · 1 спутник',
       note: 'Единственная известная планета с жизнью. Вокруг летают станции МКС и Тяньгун, телескопы Хаббл и Чандра, метеоспутники и тысячи спутников связи и навигации; на ночной стороне горят города.',
-      moons: [{ name: 'Луна', a: 60.3, P: 27.32, L0: 218.316, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
+      moons: [{ name: 'Луна', a: 60.3, P: 27.321661, L0: 218.316, size: 0.273, col: ['#ffffff', '#b8b8b8', '#3a3a3a'], inc: -18.3 }] },
     { id: 'mars', e: 0.0934, peri: 336.04, pole: 353, name: 'Марс', a: 1.524, L0: 355.43, n: 0.52403, r: 3.4, col: ['#ffd2b8', '#d4623a', '#4e1a0c'],
       rot: 1.02596, tiltAx: 25.19, p1: 0.0694, halo: '255,150,110',
       facts: 'Диаметр 6 779 км · 1,52 а. е. · год 687 дней · сутки 24 ч 37 мин · наклон оси 25,2° · 2 спутника',
@@ -528,6 +543,14 @@
     return [d * Math.cos(th), 0, -d * Math.sin(th)];
   }
   const trueLon = p => { const L = (p.L0 + p.n * days) * DEG, M = L - p.peri * DEG; return L + 2 * p.e * Math.sin(M) + 1.25 * p.e * p.e * Math.sin(2 * M); };
+  // umbral lunar eclipse from a short lunar theory (Meeus, main terms): the Moon's centre within ~0.98° of the anti-Sun point
+  const lunarEclipse = d => {
+    const M = (134.963 + 13.064993 * d) * DEG, F = (93.272 + 13.22935 * d) * DEG, D = (297.85 + 12.190749 * d) * DEG, Ms = (357.529 + 0.98560028 * d) * DEG;
+    const lon = (218.316 + 13.176396 * d + 6.289 * Math.sin(M) + 1.274 * Math.sin(2 * D - M) + 0.658 * Math.sin(2 * D) + 0.214 * Math.sin(2 * M) - 0.186 * Math.sin(Ms) - 0.114 * Math.sin(2 * F)) * DEG;
+    const lat = (5.128 * Math.sin(F) + 0.281 * Math.sin(M + F) + 0.278 * Math.sin(M - F) + 0.173 * Math.sin(2 * D - F)) * DEG;
+    const anti = (460.46 + 0.9856474 * d + 1.915 * Math.sin(Ms) + 0.02 * Math.sin(2 * Ms)) * DEG;
+    return Math.cos(lat) * Math.cos(lon - anti) > Math.cos(0.98 * DEG);
+  };
 
   function sphere(x, y, r, col, lx, ly) {
     const g = ctx.createRadialGradient(x + lx * r * 0.5, y + ly * r * 0.5, r * 0.08, x, y, r * 1.05);
@@ -991,9 +1014,12 @@
     const alat = Math.abs(lat);
     switch (b.id) {
       case 'sun': {
-        const g = fbm(x * 22, y * 22, z * 22, 3) * 0.7 + fbm(x * 6, y * 6, z * 6, 2) * 0.3;
-        let c = mix([255, 150, 40], [255, 240, 180], smooth(clamp((g - 0.3) * 2.2, 0, 1)));
-        if (alat < 35 * DEG && alat > 6 * DEG && fbm(x * 4 + 9, y * 4, z * 4, 3) > 0.74) c = [120, 50, 10];
+        const g = fbm(x * 40, y * 40, z * 40, 3) * 0.6 + fbm(x * 9, y * 9, z * 9, 2) * 0.4;
+        let c = mix([255, 172, 72], [255, 236, 190], smooth(clamp((g - 0.3) * 2.0, 0, 1)));
+        if (alat < 35 * DEG && alat > 6 * DEG) {   // sunspots: soft penumbra around a dark umbra
+          const sp = fbm(x * 4 + 9, y * 4, z * 4, 3);
+          c = mix(c, mix([215, 120, 45], [70, 28, 8], smooth(clamp((sp - 0.765) / 0.03, 0, 1))), smooth(clamp((sp - 0.725) / 0.035, 0, 1)));
+        }
         return c;
       }
       case 'mercury': {
@@ -1014,23 +1040,30 @@
         return mix([10, 35, 105], [35, 95, 175], smooth(clamp((n - 0.3) * 4, 0, 1)));
       }
       case 'mars': {
-        if (alat > 76 * DEG) return [240, 236, 230];
-        let c = mix([165, 70, 35], [220, 135, 85], n);
+        let c = mix([170, 88, 52], [214, 146, 104], n);
         c = mix(c, [100, 50, 32], 0.6 * smooth(clamp((fbm(x * 2.2 + 7, y * 2.2, z * 2.2, 4) - 0.52) / 0.1, 0, 1)));
-        return c;
+        c = mix(c, [c[0] * 0.78, c[1] * 0.74, c[2] * 0.72], 0.2 * smooth(clamp((fbm(x * 22, y * 22, z * 22, 3) - 0.5) / 0.12, 0, 1)));   // fine albedo mottling
+        const cap = smooth(clamp((alat / DEG - 78 - (fbm(x * 9, y * 9, z * 9, 3) - 0.5) * 6) / 3, 0, 1));   // ragged, soft-edged polar cap
+        return mix(c, [245, 240, 232], cap);
       }
       case 'jupiter': {
-        const b2 = clamp(Math.sin(lat * 22 + fbm(x * 3, y * 3, z * 3) * 2.4) * 0.75 + 0.35 * Math.sin(lat * 47), -1, 1);
+        const wq = fbm(x * 2.2, y * 2.2, z * 2.2, 4) - 0.5, st = fbm(x * 6 + 3, y * 30, z * 6, 4) - 0.5;   // big warp + streaks stretched along longitude
+        const L = lat + wq * 0.07 + st * 0.035;
+        const b2 = clamp(Math.sin(L * 22 + wq * 1.5) * 0.75 + 0.35 * Math.sin(L * 47), -1, 1);
         const s2 = (b2 + 1) / 2;
         let c = s2 > 0.5 ? mix([215, 180, 140], [240, 228, 205], smooth((s2 - 0.5) * 2)) : mix([150, 95, 65], [215, 180, 140], smooth(s2 * 2));
-        c = mix(c, [255, 245, 230], (n - 0.5) * 0.8);
-        const dl = (lat + 22 * DEG) / (6 * DEG), dn = Math.atan2(Math.sin(lon), Math.cos(lon)) / (13 * DEG);
-        if (dl * dl + dn * dn < 1) c = mix([200, 85, 55], [225, 120, 80], dl * dl + dn * dn);
+        c = mix(c, [255, 245, 230], (n - 0.5) * 0.5 + st * 0.6);
+        if (alat < 9 * DEG) c = mix(c, [150, 118, 98], 0.35 * smooth(clamp((fbm(x * 10, y * 16, z * 10, 3) - 0.68) / 0.08, 0, 1)));   // dark equatorial festoons
+        const dl = (lat + 22 * DEG) / (6 * DEG), dn = Math.atan2(Math.sin(lon), Math.cos(lon)) / (13 * DEG), e = dl * dl + dn * dn;
+        c = mix(c, [246, 236, 220], 0.5 * Math.exp(-(((e - 1.25) / 0.2) ** 2)));                        // pale collar around the Red Spot
+        c = mix(c, mix([196, 92, 60], [226, 140, 98], e), smooth(clamp((1 - e) / 0.35, 0, 1)));
         return c;
       }
       case 'saturn': {
-        const b2 = Math.sin(lat * 18 + fbm(x * 2, y * 6, z * 2) * 0.8);
-        let c = mix(mix([190, 160, 105], [245, 228, 180], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.25);
+        const st = fbm(x * 5, y * 30, z * 5, 3) - 0.5;
+        const b2 = Math.sin(lat * 18 + fbm(x * 2, y * 6, z * 2) * 0.8 + st * 0.5);
+        let c = mix(mix([210, 175, 115], [240, 216, 160], (b2 + 1) / 2), [255, 240, 205], (n - 0.5) * 0.25 + st * 0.3);
+        c = mix(c, [175, 172, 155], 0.55 * smooth(clamp((alat / DEG - 50) / 25, 0, 1)));   // greyer, cooler high latitudes
         if (lat > 70 * DEG) {   // the north-polar hexagon near 78° N with a bluish cap inside
           const rho = 90 - lat / DEG, seg = ((lon % (Math.PI / 3)) + Math.PI / 3) % (Math.PI / 3) - Math.PI / 6;
           const edge = 12 * Math.cos(Math.PI / 6) / Math.cos(seg);
@@ -1040,13 +1073,14 @@
         return c;
       }
       case 'uranus':
-        return mix([130, 205, 215], [175, 235, 240], (Math.sin(lat * 5) + 1) * 0.3 + (n - 0.5) * 0.4);
+        return mix(mix([150, 206, 216], [178, 226, 232], (Math.sin(lat * 7) + 1) * 0.25 + (n - 0.5) * 0.3), [210, 238, 240], 0.6 * smooth(clamp((lat / DEG - 45) / 25, 0, 1)));   // bright north polar cap
       case 'neptune': {
         let c = mix([30, 60, 185], [70, 110, 235], n);
         const dl = (lat + 20 * DEG) / (7 * DEG), dn = Math.atan2(Math.sin(lon - 0.7), Math.cos(lon - 0.7)) / (14 * DEG);
-        if (dl * dl + dn * dn < 1) c = [20, 32, 110];
-        const st = fbm(x * 3 + 1, y * 14, z * 3, 3);   // thin bright cirrus streaks
-        if (st > 0.6) c = mix(c, [205, 222, 255], smooth(clamp((st - 0.6) / 0.16, 0, 1)) * 0.55);
+        const e = dl * dl + dn * dn;
+        c = mix(c, [22, 36, 115], smooth(clamp((1 - e) / 0.4, 0, 1)));                           // Great Dark Spot, soft edge
+        const st = fbm(x * 2 + 1, y * 24, z * 2, 4);   // thin bright cirrus streaks, stretched along longitude
+        c = mix(c, [210, 226, 255], smooth(clamp((st - 0.6) / 0.12, 0, 1)) * 0.6);
         return c;
       }
     }
@@ -1078,7 +1112,7 @@
       uniform sampler2D uTex, uCloud, uRing;
       uniform mat3 uMb, uMt;
       uniform vec3 uLc, uLt, uAtm;
-      uniform float uAtmK, uBand, uSun, uSpec, uHasCloud, uHasRing, uRin, uRout, uPix, uTime, uCloudOff, uRingK;
+      uniform float uAtmK, uBand, uSun, uSpec, uHasCloud, uHasRing, uRin, uRout, uPix, uTime, uCloudOff, uRingK, uRingSh;
       const float PI = 3.14159265;
       vec2 sphUV(vec3 b) { return vec2(atan(b.z, b.x) / (2.0 * PI) + 0.5, 0.5 - asin(clamp(b.y, -1.0, 1.0)) / PI); }
       float ringA(float rr) {
@@ -1092,32 +1126,37 @@
         if (uSun > 0.5) {
           vec4 t2 = texture2D(uTex, uv + vec2(0.004 * sin(uTime * 0.7), 0.003 * cos(uTime * 0.9)));
           vec3 sc = mix(t.rgb, t2.rgb, 0.5 + 0.5 * sin(uTime * 1.3 + t.r * 12.0));
-          return sc * mix(vec3(0.85, 0.4, 0.1), vec3(1.0), pow(c.z, 0.6)) * vec3(1.08, 1.0, 0.92);   // limb darkening reddens the edge
+          vec3 sx = sc * sc * (1.0 - vec3(0.42, 0.66, 0.88) * (1.0 - c.z)) * 0.78;   // linear limb darkening, stronger in green and blue: an orange-gold limb
+          return sqrt(clamp(sx * (2.51 * sx + 0.03) / (sx * (2.43 * sx + 0.59) + 0.14), 0.0, 1.0));
         }
         float ndl = dot(c, uLc);
         float soft = smoothstep(-0.12, 0.18, ndl);
         float lit = max(ndl, 0.0) * 0.9 + soft * 0.1;
         float cl = uHasCloud > 0.5 ? texture2D(uCloud, uv + vec2(uCloudOff, 0.0)).r : 0.0;
-        vec3 res = t.rgb * (0.018 + lit);
+        vec3 alb = t.rgb * t.rgb;                                                      // sRGB -> linear (gamma 2)
+        vec3 sunC = mix(vec3(1.0), vec3(1.0, 0.5, 0.25), uAtmK * 0.7 * (1.0 - smoothstep(0.0, 0.3, ndl)));   // grazing sunlight reddens, only in the terminator band
+        vec3 res = alb * (0.004 + lit * sunC);
         if (uSpec > 0.5) {
           float ocean = step(t.r + t.g * 0.5, t.b * 0.95);
           vec3 h = normalize(uLc + vec3(0.0, 0.0, 1.0));
-          res += vec3(1.0, 0.92, 0.8) * pow(max(dot(c, h), 0.0), 70.0) * ocean * soft * 0.55 * (1.0 - cl);
-          res += vec3(1.0, 0.8, 0.5) * t.a * (1.0 - soft) * (1.0 - cl) * 0.85;
+          res += vec3(1.0, 0.85, 0.65) * pow(max(dot(c, h), 0.0), 90.0) * ocean * soft * (0.2 + 0.8 * pow(1.0 - c.z, 5.0)) * 0.3 * (1.0 - cl) * sunC;
+          res += vec3(1.0, 0.62, 0.25) * t.a * t.a * (1.0 - soft) * (1.0 - cl) * 0.6;
         }
-        res = mix(res, vec3(0.92, 0.95, 1.0) * (0.02 + lit), cl * 0.9);
-        res *= mix(1.0, 0.45 + 0.55 * c.z, uBand);
+        res = mix(res, vec3(0.85, 0.88, 0.92) * (0.004 + lit * sunC), cl * 0.9);
+        res *= mix(1.0, 0.2 + 0.8 * c.z, uBand);
         if (uHasRing > 0.5 && abs(uLt.y) > 0.002) {
           vec3 q = uMt * c;
           float s = -q.y / uLt.y;
-          if (s > 0.0) { vec3 h2 = q + s * uLt; res *= 1.0 - 0.85 * ringA(length(h2.xz)); }
+          if (s > 0.0) { vec3 h2 = q + s * uLt; res *= 1.0 - uRingSh * ringA(length(h2.xz)); }
         }
-        res += uAtm * uAtmK * pow(1.0 - c.z, 3.0) * (soft * 0.85 + 0.05);
-        res += vec3(0.9, 0.95, 1.0) * pow(1.0 - c.z, 7.0) * soft * uBand * 0.35;       // glossy rim light
-        res += mix(uAtm, vec3(0.55, 0.7, 1.0), 0.5) * pow(1.0 - c.z, 5.0) * (1.0 - soft) * 0.18;   // faint rim on the night side
+        float tr = exp(-uAtmK * 0.07 / max(c.z, 0.08));                               // haze thickens toward the limb
+        res = res * tr + uAtm * uAtm * (1.0 - tr) * (soft * 0.9 + 0.01) * sunC;
+        res += vec3(0.9, 0.95, 1.0) * pow(1.0 - c.z, 7.0) * soft * uBand * 0.12;       // glossy rim light
+        res += uAtm * uAtm * pow(1.0 - c.z, 5.0) * (1.0 - soft) * 0.03;                // faint rim on the night side
         vec3 hh = normalize(uLc + vec3(0.0, 0.0, 1.0));
-        res += vec3(1.0) * pow(max(dot(c, hh), 0.0), 24.0) * uBand * 0.12 * soft;      // soft sheen
-        return 1.0 - exp(-res * 1.35);                                                 // soft shoulder instead of clipping
+        res += vec3(1.0) * pow(max(dot(c, hh), 0.0), 24.0) * uBand * 0.05 * soft;     // soft sheen
+        vec3 x = res * 0.85;                                                            // filmic (ACES fit), back to display gamma
+        return sqrt(clamp(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0));
       }
       void main() {
         vec2 p = vP;
@@ -1182,7 +1221,7 @@
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
     const U = {};
     ['uTex', 'uCloud', 'uRing', 'uMb', 'uMt', 'uLc', 'uLt', 'uAtm', 'uAtmK', 'uBand', 'uSun', 'uSpec', 'uHasCloud', 'uHasRing',
-     'uRin', 'uRout', 'uPix', 'uTime', 'uCloudOff', 'uExt', 'uRpx', 'uCenter', 'uView', 'uRingK'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+     'uRin', 'uRout', 'uPix', 'uTime', 'uCloudOff', 'uExt', 'uRpx', 'uCenter', 'uView', 'uRingK', 'uRingSh'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
     gl.uniform1i(U.uTex, 0); gl.uniform1i(U.uCloud, 1); gl.uniform1i(U.uRing, 2);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     const blank = makeTex(new Uint8Array(4), 1, 1, gl.CLAMP_TO_EDGE);
@@ -1232,7 +1271,8 @@
         float d = dot(q, uLt);
         if (d < 0.0) vis *= mix(0.06, 1.0, smoothstep(0.93, 1.04, sqrt(max(dot(q, q) - d * d, 0.0))));   // in the planet's shadow
         float tw = aLook.z >= 0.0 ? 0.5 + 0.5 * sin(uTime * 2.2 + aLook.z) : 1.0;
-        float wid = aLook.x * uDpr * (1.0 + 0.3 * c.z / uOut);
+        float near = clamp(c.z / uOut, -1.0, 1.0);                                      // grains toward the camera are bigger and brighter
+        float wid = aLook.x * uDpr * (1.0 + 0.55 * near + 0.9 * max(near, 0.0) * max(near, 0.0));
         float dl = length(tc.xy);
         vec2 dir = dl > 1e-4 ? tc.xy / dl : vec2(1.0, 0.0);
         float len = wid * 1.6 + min(aOrb.w * r * uRpx * max(uStreak, 0.0025) * dl, 16.0 * uDpr);   // minimum exposure keeps the motion streaks
@@ -1240,7 +1280,7 @@
         vec2 pos = uCenter + c.xy * uRpx;
         gl_Position = vis > 0.0 ? vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0) : vec4(2.0, 2.0, 0.0, 1.0);
         gl_PointSize = vSize;
-        vCol = aCol * aLook.y * tw * vis * uAlpha;
+        vCol = aCol * aLook.y * tw * vis * uAlpha * (0.8 + 0.35 * near);
         vDir = dir; vLen = len; vWid = wid;
       }`, PART_FS);
     const belt = link(`
@@ -1257,13 +1297,13 @@
         vec3 tc = uM * vec3(-sin(L), 0.0, -cos(L));
         float dl = length(tc.xy);
         vec2 dir = dl > 1e-4 ? tc.xy / dl : vec2(1.0, 0.0);
-        float wid = aLook.x * uDpr * uSizeK;
-        float len = wid * 1.6 + min(aOrb.w * d * uZoom * uDpr * uStreak * dl, 14.0 * uDpr);
+        float wid = max(aLook.x * uDpr * uSizeK, 1.15);
+        float len = wid * 1.6 + min(max(aOrb.w * d * uZoom * uStreak, 2.4 * uSizeK) * uDpr * dl, 14.0 * uDpr);   // minimum exposure: fine dashes, not static
         vSize = len + 2.0;
         gl_PointSize = vSize;
         gl_Position = vec4(pos.x / uView.x * 2.0 - 1.0, 1.0 - pos.y / uView.y * 2.0, 0.0, 1.0);
         float tw = aLook.z >= 0.0 ? 0.55 + 0.45 * sin(uTime * 2.0 + aLook.z) : 1.0;
-        vCol = aCol * aLook.y * tw; vDir = dir; vLen = len; vWid = wid;
+        vCol = aCol * aLook.y * tw * (uDpr < 1.5 ? 1.35 : 1.0); vDir = dir; vLen = len; vWid = wid;
       }`, PART_FS);
     const QV = `attribute vec2 aPos; varying vec2 vUv; void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
     const bright = link(QV, `
@@ -1272,7 +1312,7 @@
         vec4 s = (texture2D(uSrc, vUv + uTexel * vec2(-1.0, -1.0)) + texture2D(uSrc, vUv + uTexel * vec2(1.0, -1.0)) +
                   texture2D(uSrc, vUv + uTexel * vec2(-1.0, 1.0)) + texture2D(uSrc, vUv + uTexel * vec2(1.0, 1.0))) * 0.25;
         float l = max(s.r, max(s.g, s.b));
-        gl_FragColor = vec4(s.rgb * smoothstep(uThr, uThr + 0.35, l), 1.0);
+        gl_FragColor = vec4(s.rgb * smoothstep(uThr - 0.15, uThr + 0.45, l), 1.0);
       }`);
     const blur = link(QV, `
       precision mediump float; varying vec2 vUv; uniform sampler2D uSrc; uniform vec2 uDir;
@@ -1283,10 +1323,13 @@
         gl_FragColor = vec4(c, 1.0);
       }`);
     const fin = link(QV, `
-      precision mediump float; varying vec2 vUv; uniform sampler2D uScene, uBloom; uniform float uBloomK, uFade;
+      precision mediump float; varying vec2 vUv; uniform sampler2D uScene, uBloom, uBloom2; uniform float uBloomK, uFade;
       void main() {
         vec4 s = texture2D(uScene, vUv);
-        vec3 c = s.rgb + texture2D(uBloom, vUv).rgb * uBloomK;
+        vec3 bl = texture2D(uBloom, vUv).rgb + texture2D(uBloom2, vUv).rgb * 0.6;   // quarter-res glow plus a wide eighth-res one
+        bl = mix(vec3(dot(bl, vec3(0.333))), bl, 1.15);                             // a little neon
+        vec3 c = s.rgb + bl * uBloomK;
+        c = min(c, 0.8) + 0.2 * (1.0 - exp(-max(c - 0.8, 0.0) * 5.0));   // soft knee instead of a hard clip
         float a = clamp(max(s.a, max(c.r, max(c.g, c.b))), 0.0, 1.0);
         gl_FragColor = vec4(min(c, vec3(a)), a) * uFade;
       }`);
@@ -1298,7 +1341,7 @@
       beltA: { orb: gl.getAttribLocation(belt, 'aOrb'), look: gl.getAttribLocation(belt, 'aLook'), col: gl.getAttribLocation(belt, 'aCol') },
       bright, brightU: loc(bright, ['uSrc', 'uTexel', 'uThr']),
       blur, blurU: loc(blur, ['uSrc', 'uDir']),
-      fin, finU: loc(fin, ['uScene', 'uBloom', 'uBloomK', 'uFade']),
+      fin, finU: loc(fin, ['uScene', 'uBloom', 'uBloom2', 'uBloomK', 'uFade']),
       targets: null,
     };
   }
@@ -1319,9 +1362,9 @@
   function ensureTargets() {
     const w = glc.width, h = glc.height;
     if (SC.targets && SC.targets.w === w && SC.targets.h === h) return SC.targets;
-    if (SC.targets) for (const k of ['scene', 'a', 'b']) { gl.deleteTexture(SC.targets[k].tex); gl.deleteFramebuffer(SC.targets[k].fb); }
-    const qw = Math.max(1, Math.ceil(w / 4)), qh = Math.max(1, Math.ceil(h / 4));
-    return (SC.targets = { w, h, scene: target(w, h), a: target(qw, qh), b: target(qw, qh) });
+    if (SC.targets) for (const k of ['scene', 'a', 'b', 'c', 'd']) { gl.deleteTexture(SC.targets[k].tex); gl.deleteFramebuffer(SC.targets[k].fb); }
+    const qw = Math.max(1, Math.ceil(w / 4)), qh = Math.max(1, Math.ceil(h / 4)), ew = Math.max(1, Math.ceil(w / 8)), eh = Math.max(1, Math.ceil(h / 8));
+    return (SC.targets = { w, h, scene: target(w, h), a: target(qw, qh), b: target(qw, qh), c: target(ew, eh), d: target(ew, eh) });
   }
   function quadPass(prog, dst) {
     gl.useProgram(prog);
@@ -1339,7 +1382,7 @@
     const data = [];
     const push = (r, a, h, w, size, br, tw, c) => data.push(r, a, h, w, size, br, tw, 0, c[0] / 255, c[1] / 255, c[2] / 255);
     const kepler = r => TAU / (b.p1 * Math.pow(r, 1.5));
-    const k = small ? 1 : 1.8;
+    const k = small ? 1 : ULTRA ? 3.6 : 1.8, kb = ULTRA ? 0.62 : 1;   // ULTRA: twice the grains, each dimmer, so denser and finer, not brighter
     if (b.rings) {
       const ring = ringProfile(b), wsum = b.rings.reduce((t, q) => t + Math.max(q[1] - q[0], 0.012) * q[2], 0);
       const n = Math.round((b.id === 'saturn' ? 42000 : 2500) * k);
@@ -1358,7 +1401,8 @@
         const j = rnd(0.75, 1.25), flake = Math.random() < 0.008;
         const col = flake ? [255, 240, 215] : [Math.min(255, c[0] * j), Math.min(255, c[1] * j), Math.min(255, c[2] * j)];
         const arc = b.id === 'neptune' && r > 2.5 && Math.random() < 0.75;   // Adams ring: Liberté, Égalité, Fraternité, Courage within ~40°
-        push(r, arc ? rnd(0, 0.7) + (Math.random() < 0.3 ? 0.15 : 0) : rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.07, 0.22)) * (b.id === 'saturn' ? 1.15 - 0.45 * c[3] : 0.8), -1, col);
+        const rl = b.id === 'saturn' ? 0.55 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(r * 173 + 3 * Math.sin(r * 41)), 2.5) : 1;   // fine ringlets, ~0.036 Saturn radii apart
+        push(r, arc ? rnd(0, 0.7) + (Math.random() < 0.3 ? 0.15 : 0) : rnd(0, TAU), gauss() * 0.006, kepler(r), flake ? rnd(1.6, 2.6) : rnd(0.6, 1.4), (flake ? rnd(0.5, 0.8) : rnd(0.07, 0.22)) * (b.id === 'saturn' ? 1.15 - 0.45 * c[3] : 0.8) * rl * kb, -1, col);
       }
     }
     if (!b.isSun) {
@@ -1413,7 +1457,7 @@
       gl.disableVertexAttribArray(a.look); gl.disableVertexAttribArray(a.col);
       gl.disable(gl.BLEND);
     }
-    bloomAndCompose(0.6, b.isSun ? 1.1 : 0.9, A);
+    bloomAndCompose(b.isSun ? 0.7 : 0.75, b.isSun ? 0.6 : 0.65, A);   // the Sun's disc sits near the knee: a gentler glow keeps it gold, not white
   }
 
   // bloom: bright-pass at quarter resolution, two separable blur rounds, then add back onto the scene
@@ -1428,10 +1472,17 @@
       gl.uniform2f(SC.blurU.uDir, sp / T.a.w, 0); gl.bindTexture(gl.TEXTURE_2D, T.a.tex); quadPass(SC.blur, T.b);
       gl.uniform2f(SC.blurU.uDir, 0, sp / T.a.h); gl.bindTexture(gl.TEXTURE_2D, T.b.tex); quadPass(SC.blur, T.a);
     }
+    // a wider level at 1/8 resolution, so dim ring and belt grains glow too
+    gl.uniform2f(SC.blurU.uDir, 1 / T.a.w, 0); gl.bindTexture(gl.TEXTURE_2D, T.a.tex); quadPass(SC.blur, T.c);   // downsample
+    for (const sp of [1.5, 3.5]) {
+      gl.uniform2f(SC.blurU.uDir, sp / T.c.w, 0); gl.bindTexture(gl.TEXTURE_2D, T.c.tex); quadPass(SC.blur, T.d);
+      gl.uniform2f(SC.blurU.uDir, 0, sp / T.c.h); gl.bindTexture(gl.TEXTURE_2D, T.d.tex); quadPass(SC.blur, T.c);
+    }
     gl.useProgram(SC.fin);
-    gl.uniform1i(SC.finU.uScene, 0); gl.uniform1i(SC.finU.uBloom, 1);
+    gl.uniform1i(SC.finU.uScene, 0); gl.uniform1i(SC.finU.uBloom, 1); gl.uniform1i(SC.finU.uBloom2, 2);
     gl.uniform1f(SC.finU.uBloomK, k); gl.uniform1f(SC.finU.uFade, fade);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, T.a.tex);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, T.c.tex);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, T.scene.tex);
     quadPass(SC.fin, null);
   }
@@ -1474,6 +1525,7 @@
     } catch (e) { q.pix = null; }
     return q.pix;
   }
+  const earthPhotosReady = () => EARTH_PHOTOS.some(q => photoPixels(q));
   const dot3 = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
   // texture point (x, y, z) on the unit sphere (x, z equatorial; geographic longitude = -atan2(z, x)) -> [r, g, b, weight] or null
   function earthPhotoAt(x, y, z) {
@@ -1500,11 +1552,15 @@
   function textureJob(b, w) {
     const h = w / 2, surf = new Uint8Array(w * h * 4), cloud = b.id === 'earth' ? new Uint8Array(w * h * 4) : null;
     let row = 0;
-    const t0 = performance.now();
+    let t0 = null;
     return {
       step(deadline) {
         // the high-resolution Earth waits briefly for its photo to load
-        if (cloud && row === 0 && w > 128 && !EARTH_PHOTOS.every(q => ready(q.im)) && performance.now() - t0 < 6000) return false;
+        // (counted from the first step, not from page start: a slow start-up must not use up the wait)
+        if (cloud && row === 0 && w > 128) {
+          t0 ??= performance.now();
+          if (EARTH_PHOTOS.some(q => !q.im.complete) && performance.now() - t0 < 15000) return false;
+        }
         while (row < h) {
           const lat = (0.5 - (row + 0.5) / h) * Math.PI, cl = Math.cos(lat), y = Math.sin(lat);
           for (let i = 0; i < w; i++) {
@@ -1512,6 +1568,21 @@
             let c = surfaceColor(b, x, y, z, lat, lon);
             const k = (row * w + i) * 4;
             const ph = cloud ? earthPhotoAt(x, y, z) : null;
+            // the photos miss most of the Pacific: there, open ocean in the photos' own colour instead of invented land
+            // (its clouds and sea are borrowed from the Indian Ocean photo, turned 100° east, with any land there painted over as sea)
+            let fill = 0;
+            if (cloud && (!ph || ph[3] < 1) && earthPhotosReady()) {
+              const o = 0.85 + 0.3 * fbm(x * 5 + 7, y * 5, z * 5, 3), sea = [28 * o, 48 * o, 70 * o];
+              const ca = Math.cos(100 * DEG), sa = Math.sin(100 * DEG), q = earthPhotoAt(x * ca - z * sa, y, x * sa + z * ca);
+              let f = sea;
+              if (q) {
+                const isLand = q[0] > q[2] + 6 && q[0] + q[1] + q[2] < 560, white = (q[0] + q[1] + q[2]) / 765;
+                f = mix(sea, isLand ? mix(sea, [235, 238, 242], smooth(clamp((white - 0.45) / 0.3, 0, 1))) : q, q[3]);
+                fill = q[3];
+              }
+              c = mix(c, f, 1 - (ph ? ph[3] : 0));
+              fill *= 1 - (ph ? ph[3] : 0);
+            }
             if (ph) c = mix(c, ph, ph[3]);
             surf[k] = c[0]; surf[k + 1] = c[1]; surf[k + 2] = c[2];
             surf[k + 3] = 0;
@@ -1522,7 +1593,7 @@
                 surf[k + 3] = clamp((f - 0.56) * 5, 0, 1) * smooth(clamp((sp - 0.45) * 3, 0, 1)) * 210;
               }
               const f2 = fbm(x * 2.6 + 20, y * 4.2, z * 2.6, 5);
-              const cov = smooth(clamp((f2 - 0.5) / 0.16, 0, 1)) * 255 * (ph ? 1 - ph[3] : 1);   // the photo has its own clouds
+              const cov = smooth(clamp((f2 - 0.5) / 0.16, 0, 1)) * 255 * (ph ? 1 - ph[3] : 1) * (1 - fill);   // the photos have their own clouds
               cloud[k] = cloud[k + 1] = cloud[k + 2] = cov; cloud[k + 3] = 255;
             }
           }
@@ -1591,7 +1662,7 @@
   // atmosphere colour/strength and limb darkening per body
   const LOOK = {
     sun: [1, 0.6, 0.2, 0, 0], mercury: [0, 0, 0, 0, 0], venus: [1, 0.85, 0.55, 0.8, 0.5], earth: [0.35, 0.62, 1, 1, 0],
-    mars: [1, 0.6, 0.45, 0.4, 0.1], jupiter: [1, 0.88, 0.7, 0.35, 0.6], saturn: [1, 0.9, 0.7, 0.3, 0.6],
+    mars: [1, 0.75, 0.55, 0.2, 0.1], jupiter: [1, 0.88, 0.7, 0.35, 0.6], saturn: [1, 0.9, 0.7, 0.3, 0.6],
     uranus: [0.6, 0.95, 1, 0.6, 0.55], neptune: [0.45, 0.65, 1, 0.65, 0.55],
   };
 
@@ -1642,6 +1713,7 @@
     gl.uniform1f(U.uCloudOff, (days * 0.013) % 1);
     gl.uniform1f(U.uExt, ext);
     gl.uniform1f(U.uRingK, place && !place.over ? 0.45 : 1);
+    gl.uniform1f(U.uRingSh, b.id === 'saturn' ? 0.85 : 0.12);   // only Saturn's rings are dense enough to cast a visible shadow
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return { ext, px };
   }
@@ -1889,13 +1961,14 @@
       facts: 'Третий межзвёздный объект · открыт 1 июля 2025 года · скорость около 58 км/с вдали от Солнца',
       note: 'Комета из другой звёздной системы. В конце октября 2025 года прошла перигелий между орбитами Земли и Марса.' },
   ];
+  // v: entry speed (km/s); rad: radiant RA, Dec (degrees, J2000); act: activity window [month, day, month, day] (IMO)
   const STREAMS = [
-    { name: 'Персеиды', parent: 'swift', when: [2026, 8, 12], col: '#9fd8ff' },
-    { name: 'Леониды', parent: 'tempel', when: [2026, 11, 17], col: '#c8b8ff' },
-    { name: 'Геминиды', parent: 'phaethon', when: [2026, 12, 14], col: '#ffd59a' },
-    { name: 'Ориониды', parent: 'halley', when: [2026, 10, 21], col: '#a8f0e0' },
-    { name: 'Эта-Аквариды', parent: 'halley', when: [2026, 5, 6], col: '#a8f0e0' },
-    { name: 'Тауриды', parent: 'encke', when: [2026, 11, 5], col: '#ffc0a0' },
+    { name: 'Персеиды', parent: 'swift', when: [2026, 8, 12], col: '#9fd8ff', v: 59, rad: [48.2, 57.9], act: [7, 17, 8, 24] },
+    { name: 'Леониды', parent: 'tempel', when: [2026, 11, 17], col: '#c8b8ff', v: 71, rad: [152.3, 21.6], act: [11, 6, 11, 30] },
+    { name: 'Геминиды', parent: 'phaethon', when: [2026, 12, 14], col: '#ffd59a', v: 35, rad: [113.2, 32.2], act: [12, 4, 12, 20] },
+    { name: 'Ориониды', parent: 'halley', when: [2026, 10, 21], col: '#a8f0e0', v: 66, rad: [95.0, 15.5], act: [10, 2, 11, 7] },
+    { name: 'Эта-Аквариды', parent: 'halley', when: [2026, 5, 6], col: '#a8f0e0', v: 66, rad: [338.0, -1.0], act: [4, 19, 5, 28] },
+    { name: 'Южные Тауриды', parent: 'encke', when: [2026, 11, 5], col: '#ffc0a0', v: 27, rad: [52.0, 14.5], act: [9, 10, 11, 20] },
   ];
   const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
@@ -2013,14 +2086,23 @@
       o.sx = x; o.sy = y;
       if (o.kind === 'comet' || (o.kind === 'interstellar' && o.id !== 'oumuamua')) {
         const r = Math.hypot(...o.au);
-        if (r < 6) {   // the tail points away from the Sun and grows near perihelion
-          const len = Math.min(1.4, 0.5 / Math.max(r, 0.3)) * 0.9, tip = squeeze(o.au.map(v => v * (1 + len)));
-          const [tx, ty] = project(...tip);
+        if (r < 6) {   // two tails that grow near perihelion: a straight blue ion tail and a curved, lagging dust tail
+          const len = Math.min(1.4, 0.5 / Math.max(r, 0.3)) * 0.9;
+          const tip = project(...squeeze(o.au.map(v => v * (1 + len))));                 // ion tail: straight away from the Sun
+          const ah = keplerPos(o, days + 2), vel = o.au.map((v, i) => v - ah[i]);          // points back along the orbit
+          const vl = Math.hypot(...vel) || 1, dk = len * r * 0.36 / vl;
+          const dtip = project(...squeeze(o.au.map((v, i) => v * (1 + len * 0.75) + vel[i] * dk)));   // dust tail: curved, lagging
           ctx.globalCompositeOperation = 'lighter';
-          const g = ctx.createLinearGradient(x, y, tx, ty);
-          g.addColorStop(0, 'rgba(190,230,255,0.75)'); g.addColorStop(1, 'rgba(190,230,255,0)');
-          ctx.strokeStyle = g; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tx, ty); ctx.stroke();
-          ctx.lineWidth = 1;
+          const ang = Math.atan2(dtip[1] - y, dtip[0] - x) + Math.PI / 2, wd = Math.max(3, Math.hypot(dtip[0] - x, dtip[1] - y) * 0.22);
+          const gd = ctx.createLinearGradient(x, y, dtip[0], dtip[1]);
+          gd.addColorStop(0, 'rgba(255,240,210,0.45)'); gd.addColorStop(1, 'rgba(255,230,190,0)');
+          ctx.fillStyle = gd; ctx.beginPath(); ctx.moveTo(x, y);
+          ctx.quadraticCurveTo((x + tip[0]) / 2, (y + tip[1]) / 2, dtip[0] + Math.cos(ang) * wd, dtip[1] + Math.sin(ang) * wd);
+          ctx.lineTo(dtip[0] - Math.cos(ang) * wd, dtip[1] - Math.sin(ang) * wd); ctx.closePath(); ctx.fill();
+          const gi = ctx.createLinearGradient(x, y, tip[0], tip[1]);
+          gi.addColorStop(0, 'rgba(150,200,255,0.8)'); gi.addColorStop(1, 'rgba(120,170,255,0)');
+          ctx.strokeStyle = gi; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
+          ctx.globalAlpha = 0.35; ctx.lineWidth = 3.5; ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
           ctx.globalCompositeOperation = 'source-over';
         }
         const h = ctx.createRadialGradient(x, y, 0, x, y, 5 * sk);
@@ -2155,7 +2237,8 @@
       m.X = Mi[0] * u + Mi[2] * w; m.Y = Mi[3] * u + Mi[5] * w; m.Z = Mi[6] * u + Mi[8] * w;
       m.sx = Mc[0] * m.X + Mc[1] * m.Y + Mc[2] * m.Z; m.sy = Mc[3] * m.X + Mc[4] * m.Y + Mc[5] * m.Z; m.sd = Mc[6] * m.X + Mc[7] * m.Y + Mc[8] * m.Z;
       const dl = m.X * Lw[0] + m.Y * Lw[1] + m.Z * Lw[2];
-      m.eclipse = dl < 0 && m.X * m.X + m.Y * m.Y + m.Z * m.Z - dl * dl < 1;
+      // the moon sits at a log-compressed distance m.rd: test the shadow at its true distance m.a (planet radii)
+      m.eclipse = b.id === 'earth' ? lunarEclipse(days) : dl < 0 && (m.X * m.X + m.Y * m.Y + m.Z * m.Z - dl * dl) * (m.a / m.rd) ** 2 < 1;
       m.Mi = Mi;
     }
     const orbitPass = front => {
@@ -2279,6 +2362,7 @@
     orbitPass(true);
     satPass(true);
     moonPass(true);
+    if (b.id === 'earth' && showMeteors && FX_ON) drawAtmoMeteors(Mc, Lw, R, A);
 
     if (namesAll() && C.moons.length) {
       ctx.font = '10px "JetBrains Mono", ui-monospace, Menlo, monospace';
@@ -2373,6 +2457,14 @@
   }
   const constBtn = document.getElementById('t-const');
   constBtn.addEventListener('click', () => { showConst = !showConst; constBtn.setAttribute('aria-pressed', String(showConst)); });
+  const ufoBtn = document.getElementById('t-ufo'), metBtn = document.getElementById('t-met');
+  ufoBtn.setAttribute('aria-pressed', String(showUfo)); metBtn.setAttribute('aria-pressed', String(showMeteors));
+  if (reduce) { ufoBtn.disabled = metBtn.disabled = true; }   // reduced motion: no sudden movement at all
+  ufoBtn.addEventListener('click', () => { showUfo = !showUfo; ufoBtn.setAttribute('aria-pressed', String(showUfo)); if (!showUfo) ufo = null; });
+  metBtn.addEventListener('click', () => {
+    showMeteors = !showMeteors; metBtn.setAttribute('aria-pressed', String(showMeteors));
+    if (!showMeteors) { atmo.length = 0; trains.length = 0; sky.length = 0; }
+  });
   const smallBtn = document.getElementById('t-small');
   smallBtn.addEventListener('click', () => {
     showSmall = !showSmall; smallBtn.setAttribute('aria-pressed', String(showSmall));
@@ -2409,6 +2501,7 @@
     showInfo(b);
   }
   function choose(b) {
+    if (ufo) { ufo.out = Math.min(ufo.out ?? Infinity, ufo.age); ufo.outDur = Math.min(ufo.outDur, 0.4); }   // a view change fades the craft out
     if (b && b.isFar) {   // pull far back from the planets
       closeTarget = 0; pendingSel = undefined; focus = null;
       if (speedBeforeClose !== null) { setSpeed(speedBeforeClose); speedBeforeClose = null; }
@@ -2591,10 +2684,493 @@
         choose(wallView === 'tour' ? null : target(wallView));
       }
       if (o.panel !== undefined) wall.hidden = o.panel === false || o.panel === '0' || o.panel === 'false';
+      const off = v => v === false || v === 0 || v === '0' || v === 'false';
+      if (o.ufo !== undefined) { showUfo = FX_ON && !off(o.ufo); if (!showUfo) ufo = null; }
+      if (o.meteors !== undefined) showMeteors = FX_ON && !off(o.meteors);
     }
     applyWall(Object.fromEntries(new URLSearchParams(location.hash.replace(/^#wallpaper&?/, ''))));
     // drift around slowly instead of waiting for a finger
     setInterval(() => { vYaw = 0.0006; vcYaw = 0.0008; }, 1000);
+  }
+
+  // ---------- rare sky events: UFOs and meteors (real time, Canvas 2D) ----------
+  // drawn after the GL composite, so their glow is faked with sprites and 'lighter' compositing; they add no particles
+  let fxDt = 0, fxT = 0;   // real seconds, frozen by «Пауза»
+  const glowCache = new Map();
+  function glowSprite(rgb) {   // one 64×64 radial sprite per colour, reused every frame
+    let c = glowCache.get(rgb); if (c) return c;
+    c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(0.18, `rgba(${rgb},0.55)`); gr.addColorStop(0.45, `rgba(${rgb},0.12)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); glowCache.set(rgb, c); return c;
+  }
+  const spot = (x, y, r, rgb, a) => { if (a <= 0.003) return; ctx.globalAlpha = Math.min(1, a); ctx.drawImage(glowSprite(rgb), x - r, y - r, 2 * r, 2 * r); ctx.globalAlpha = 1; };
+  const pickW = list => { let u = Math.random() * list.reduce((s, q) => s + q[1], 0); for (const q of list) if ((u -= q[1]) <= 0) return q[0]; return list[0][0]; };
+  const ease3 = u => u * u * (3 - 2 * u);
+  const sstep = (a, b, x) => smooth(clamp((x - a) / (b - a), 0, 1));
+
+  // --- meteor showers: radiant, activity window, colour by entry speed (astronomer) ---
+  const EPS = 23.44 * DEG;
+  function radiantW(st) {   // radiant direction on world axes (x, up, z), from RA/Dec through the ecliptic
+    if (st.rw) return st.rw;
+    const a = st.rad[0] * DEG, d = st.rad[1] * DEG, xq = Math.cos(d) * Math.cos(a), yq = Math.cos(d) * Math.sin(a), zq = Math.sin(d);
+    const ye = yq * Math.cos(EPS) + zq * Math.sin(EPS), ze = -yq * Math.sin(EPS) + zq * Math.cos(EPS);
+    const lam = Math.atan2(ye, xq), bet = Math.asin(ze);
+    return (st.rw = [Math.cos(bet) * Math.cos(lam), Math.sin(bet), -Math.cos(bet) * Math.sin(lam)]);
+  }
+  function activeShower() {   // the strongest active shower today and its weight 0..1 (Gaussian from the peak, σ ≈ 5 d)
+    const d = new Date(J2000 + days * 86400000), y = d.getUTCFullYear(), now = d.getTime();
+    let best = null, bw = 0;
+    for (const st of STREAMS) {
+      const t0 = Date.UTC(y, st.act[0] - 1, st.act[1]), t1 = Date.UTC(y, st.act[2] - 1, st.act[3]);
+      if (now < t0 || now > t1) continue;
+      const dd = (now - Date.UTC(y, st.when[1] - 1, st.when[2])) / 864e5, w = Math.exp(-((dd / 5) ** 2));
+      if (w > bw) { bw = w; best = st; }
+    }
+    return best ? { st: best, w: Math.max(bw, 0.15) } : null;
+  }
+  const metRgb = (v, st) => st ? hexRgb(st.col).join(',')    // shower: same colour as its stream in the overview
+    : v < 30 ? (Math.random() < 0.5 ? '255,208,138' : '255,186,110')   // slow: Na/Fe, yellow-orange
+    : v > 55 ? (Math.random() < 0.5 ? '200,255,216' : '184,232,255')   // fast: O/Mg white-green, Ca+ bluish
+    : '255,240,205';                                                    // medium: white with a yellow tint
+  const HEAD = '255,246,232', O_GREEN = '125,255,176';
+
+  // --- A. entries into Earth's night-side atmosphere, seen from orbit (Earth close-up only) ---
+  // heights are true (120 → 80 km, fireballs down to 40 km); only the path length is stretched ×4 so it reads on screen
+  const atmo = [], trains = []; let atmoNext = 1, atmoT = 0, atmoFirst = MET_TEST;
+  function spawnAtmo(Mc, Lw, sh) {
+    const L = Math.atan2(Lw[2], -Lw[0]), vE = [-Math.sin(L), 0, -Math.cos(L)];   // Earth's orbital velocity: the morning side meets more dust
+    const rw = sh && radiantW(sh.st);
+    for (let tries = 0; tries < 24; tries++) {
+      const u = rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u), n = [q * Math.cos(ph), u, q * Math.sin(ph)];   // world unit vector
+      const z = Mc[6] * n[0] + Mc[7] * n[1] + Mc[8] * n[2], day = dot3(n, Lw);
+      if (z < 0.02 || day > 0) continue;                           // front side, night side only (the limb too)
+      if (rw ? dot3(n, rw) < 0.05 : Math.random() > 0.55 + 0.45 * dot3(n, vE)) continue;   // shower: the hemisphere facing the radiant
+      let d = rw ? [-rw[0], -rw[1], -rw[2]] : [rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)];   // shower: one shared direction, so the streaks run parallel
+      const dn = dot3(d, n); d = d.map((v, i) => v - dn * n[i]);
+      const dl = Math.hypot(...d) || 1; d = d.map(v => v / dl);
+      const st = rw ? sh.st : null, v = st ? st.v : rnd(20, 70);
+      const fire = atmoFirst || Math.random() < (st && st.v < 40 ? 1 / 10 : 1 / 25);
+      const m = { n, d, v, fire, age: 0, dur: fire ? rnd(1.5, 3) : clamp(25 / v, 0.25, 1.2), len: fire ? rnd(0.18, 0.28) : rnd(0.04, 0.09),
+        h0: 0.019, h1: fire ? 0.006 : 0.0125, rgb: metRgb(v, st), limb: z < 0.25, train: atmoFirst || (v > 45 && (fire || Math.random() < 0.15)),
+        flash: fire ? Array.from({ length: 1 + (Math.random() * 3 | 0) }, () => rnd(0.4, 0.9)).sort((a, b) => a - b) : [], fl: -1 };
+      atmoFirst = false;
+      return m;
+    }
+    return null;
+  }
+  const atmoPos = (m, s) => { const h = 1 + m.h0 + (m.h1 - m.h0) * s; return [m.n[0] * h + m.d[0] * m.len * s, m.n[1] * h + m.d[1] * m.len * s, m.n[2] * h + m.d[2] * m.len * s]; };
+  function drawAtmoMeteors(Mc, Lw, R, A) {
+    const dt = fxDt; atmoT += dt;
+    if (atmoT >= atmoNext) {
+      const sh = activeShower();
+      atmoNext = atmoT + (MET_TEST ? 0.6 : rnd(2, 5) / (sh ? 1 + 2 * sh.w : 1));
+      if (atmo.filter(m => !m.frag).length < 6) { const m = spawnAtmo(Mc, Lw, sh && Math.random() < 0.8 * sh.w ? sh : null); if (m) atmo.push(m); }
+    }
+    const scr = p => [(Mc[0] * p[0] + Mc[1] * p[1] + Mc[2] * p[2]) * R, (Mc[3] * p[0] + Mc[4] * p[1] + Mc[5] * p[2]) * R, Mc[6] * p[0] + Mc[7] * p[1] + Mc[8] * p[2]];
+    const hidden = (x, y, d) => d < 0 && x * x + y * y < R * R;
+    const night = p => 1 - sstep(-0.17, 0, dot3(p, Lw) / Math.hypot(...p));   // fades out through the twilight band (±10°)
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    // persistent trains: green oxygen afterglow first, then a drifting, warmer smoke trail
+    for (let i = trains.length - 1; i >= 0; i--) {
+      const tn = trains[i]; tn.age += dt;
+      if (tn.age > tn.life) { trains.splice(i, 1); continue; }
+      tn.pts.forEach((p, k) => { for (let j = 0; j < 3; j++) p[j] += tn.drift[k][j] * 0.002 * dt; });
+      const u = tn.age / tn.life, g = clamp((tn.age - 1) / Math.max(0.5, tn.life - 1), 0, 1), al = 0.25 * (1 - u) * (1 - 0.4 * g) * A;
+      const c = mix([125, 255, 176], [255, 170, 110], g).map(v => v | 0).join(',');
+      const P = tn.pts.map(scr), k = night(tn.pts[3]) * (tn.limb ? 0.5 : 1);
+      if (P.some(q => hidden(...q)) || k <= 0) continue;
+      ctx.strokeStyle = `rgba(${c},${(al * k).toFixed(3)})`; ctx.lineWidth = 1 + 2 * u;
+      ctx.beginPath(); ctx.moveTo(P[0][0], P[0][1]);
+      for (let j = 1; j < P.length - 1; j++) ctx.quadraticCurveTo(P[j][0], P[j][1], (P[j][0] + P[j + 1][0]) / 2, (P[j][1] + P[j + 1][1]) / 2);
+      ctx.lineTo(P[P.length - 1][0], P[P.length - 1][1]); ctx.stroke();
+    }
+    for (let i = atmo.length - 1; i >= 0; i--) {
+      const m = atmo[i]; m.age += dt;
+      const s = m.age / m.dur;
+      if (s >= 1) {
+        atmo.splice(i, 1);
+        if (m.train && trains.length < 4) trains.push({ pts: Array.from({ length: 6 }, (_, k) => atmoPos(m, k / 5)), age: 0, life: rnd(2, 6), limb: m.limb,
+          drift: Array.from({ length: 6 }, () => [gauss(), gauss(), gauss()]) });
+        continue;
+      }
+      const hp = atmoPos(m, s), tp = atmoPos(m, 0), [hx, hy, hd] = scr(hp), [tx, ty] = scr(tp);   // the tail spans the path so far
+      // fireball fragmentation: a flash, then pieces that run on nearly parallel and burn out orange
+      while (m.flash.length && s >= m.flash[0]) {
+        m.flash.shift(); m.fl = m.age;
+        const hn = Math.hypot(...hp), nn = hp.map(v => v / hn);
+        for (let k = 0, nk = 1 + (Math.random() * 3 | 0); k < nk; k++) {
+          const a = rnd(-0.05, 0.05), b = [nn[1] * m.d[2] - nn[2] * m.d[1], nn[2] * m.d[0] - nn[0] * m.d[2], nn[0] * m.d[1] - nn[1] * m.d[0]];
+          const h0 = hn - 1;
+          atmo.push({ n: nn, d: m.d.map((v, j) => v * Math.cos(a) + b[j] * Math.sin(a)), v: m.v, fire: false, frag: true, age: 0, dur: rnd(0.4, 0.8),
+            len: m.len * rnd(0.15, 0.3) * rnd(0.85, 1), h0, h1: Math.max(0.004, h0 - 0.003), rgb: '255,140,60', limb: m.limb, train: false, flash: [], fl: -1 });
+        }
+      }
+      if (hidden(hx, hy, hd)) continue;
+      const k = night(hp) * (m.limb ? 0.5 : 1) * A;
+      if (k <= 0) continue;
+      const Lc = Math.pow(Math.sin(Math.PI * Math.pow(s, 0.7)), 1.4) * k;   // peaks late, like real meteor light curves
+      const g = ctx.createLinearGradient(hx, hy, tx, ty);
+      g.addColorStop(0, `rgba(${m.rgb},${(0.9 * Lc).toFixed(3)})`); g.addColorStop(0.35, `rgba(${m.rgb},${(0.35 * Lc).toFixed(3)})`); g.addColorStop(1, `rgba(${m.rgb},0)`);
+      ctx.strokeStyle = g; ctx.lineWidth = m.fire ? 2.2 : 1.1;
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke();
+      const hr = m.fire ? 3.2 : m.frag ? 1 : 1.5;
+      spot(hx, hy, hr * 3, m.rgb, 0.6 * Lc); spot(hx, hy, hr, m.frag ? m.rgb : HEAD, 0.9 * Lc);
+      if (m.fire) spot(hx, hy, 30, m.rgb, 0.12 * Lc);                          // lights the cloud tops below
+      if (m.fl >= 0 && m.age - m.fl < 0.08) spot(hx, hy, 14, '255,250,235', 0.8 * k);
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  }
+
+  // --- B. an occasional shooting star across the sky background, in every view (behind the bodies) ---
+  const sky = []; let skyT = 0, skyNext = MET_TEST ? 2 : FX_WALL ? rnd(15, 40) : rnd(20, 60);
+  const skyAng = rnd(0.35, 1.2), skyFlip = Math.random() < 0.5;   // per session: falling down and to one side
+  function skyStep(dt) {
+    if (!showMeteors) return;
+    skyT += dt;
+    for (let i = sky.length - 1; i >= 0; i--) { const m = sky[i]; m.age += dt; if (m.age > m.dur + (m.train ? 1.5 : 0)) sky.splice(i, 1); }
+    if (skyT < skyNext) return;
+    const sh = activeShower(), busy = sh && sh.w > 0.3;
+    skyNext = skyT + (MET_TEST ? 3 : (FX_WALL ? rnd(15, 40) : rnd(20, 60)) / (busy ? 2 : 1));
+    if (sky.length >= 2) return;
+    let a = skyAng + (busy ? rnd(-0.08, 0.08) : gauss() * 0.25); if (skyFlip) a = Math.PI - a;
+    const bol = Math.random() < 1 / 12;
+    sky.push({ x: rnd(0.1, 0.9) * W, y: rnd(0.05, 0.6) * H, dx: Math.cos(a), dy: Math.sin(a), len: rnd(0.08, 0.2) * Math.hypot(W, H),
+      dur: rnd(0.35, 0.8) * (bol ? 1.6 : 1), age: 0, bol, rgb: bol ? metRgb(rnd(20, 70)) : '215,230,255', train: bol });
+  }
+  function drawSkyMeteors(A) {
+    if (!sky.length) return;
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (const m of sky) {
+      const s = Math.min(1, m.age / m.dur);
+      if (m.train && m.age > m.dur * 0.3) {   // the bolide's faint green train, fading over 1.5 s
+        const u = clamp((m.age - m.dur * 0.3) / (m.dur * 0.7 + 1.5), 0, 1), e = m.len * s;
+        ctx.strokeStyle = `rgba(${O_GREEN},${(0.22 * (1 - u) * A).toFixed(3)})`; ctx.lineWidth = 1.5 + u;
+        ctx.beginPath(); ctx.moveTo(m.x + m.dx * e * 0.25, m.y + m.dy * e * 0.25); ctx.lineTo(m.x + m.dx * e * 0.9, m.y + m.dy * e * 0.9); ctx.stroke();
+      }
+      if (m.age > m.dur) continue;
+      const B = Math.sin(Math.PI * s) * A * (m.bol ? 0.9 : 0.75), hx = m.x + m.dx * m.len * s, hy = m.y + m.dy * m.len * s, tl = m.len * Math.min(s, 0.45);
+      const g = ctx.createLinearGradient(hx, hy, hx - m.dx * tl, hy - m.dy * tl);
+      g.addColorStop(0, `rgba(${m.rgb},${B.toFixed(3)})`); g.addColorStop(1, `rgba(${m.rgb},0)`);
+      ctx.strokeStyle = g; ctx.lineWidth = m.bol ? 2 : 1;
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx - m.dx * tl, hy - m.dy * tl); ctx.stroke();
+      spot(hx, hy, m.bol ? 7 : 4.2, m.rgb, 0.5 * B); spot(hx, hy, m.bol ? 2.2 : 1.4, '215,230,255', 0.9 * B);
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  }
+
+  // --- UFOs: a rare easter egg, shapes from public sighting reports (AARO, Belgian wave, Navy FLIR videos) ---
+  // never a real object: no label, no info card, no hit-testing, not in the body list or the tour, no text on screen
+  let ufoNext = UFO_FORCE ? 3 : FX_WALL ? rnd(60, 150) : rnd(240, 480);
+  const UFO_W = [['orb', 40], ['triangle', 15], ['saucer', 13], ['tictac', 12], ['gimbal', 10], ['cube', 10]];
+  const ORB_COL = [['255,246,228', 40], ['255,190,95', 40], ['255,140,60', 20]];   // white, amber, orange
+  // a craft lives in CSS px over the overview, or in camera space in planet radii (x right, y down, z toward us) in a close-up
+  const ufoK = () => closeR * cZoom * closeSc;
+  const ufoScr = (u, q) => u.close ? [closeCx + q[0] * ufoK(), closeCy + q[1] * ufoK()] : [q[0], q[1]];
+  const ufoUnit = (u, x, y) => u.close ? [(x - closeCx) / ufoK(), (y - closeCy) / ufoK()] : [x, y];
+  const ufoHidden = (u, q) => u.close && (q[2] ?? u.z) < 0 && q[0] * q[0] + q[1] * q[1] < 1;   // behind the planet
+  function ufoSpot(close) {   // a random point in open sky: overview avoids the Sun, close-ups stay off the disc
+    for (let k = 0; k < 40; k++) {
+      const x = rnd(0.12, 0.88) * W, y = rnd(0.12, 0.8) * H;
+      if (!close && Math.hypot(x - SUN.sx, y - SUN.sy) < 0.12 * Math.min(W, H)) continue;
+      if (close) { const r = Math.hypot(x - closeCx, y - closeCy) / ufoK(); if (r < 1.25 || r > 2.4) continue; }
+      return [x, y];
+    }
+    return [W * 0.8, H * 0.25];
+  }
+  const inView = (x, y, m = 0.06) => x > W * m && x < W * (1 - m) && y > H * m && y < H * (1 - m);
+  function spawnUfo(type, close) {
+    const uk = clamp(Math.min(W, H) / 1080, 0.8, 1.6) * (close ? 1.25 : 1);
+    const u = { type, close, uk, age: 0, inDur: 1, outDur: 1, out: undefined, z: Math.random() < 0.5 ? 1.4 : -1.4 };
+    const px = close ? 1 / ufoK() : 1;    // CSS px → units
+    const at = (x, y) => ufoUnit(u, x, y);
+    if (type === 'orb') {
+      const r = Math.random(), n = r < 0.6 ? 1 : r < 0.85 ? 3 : 4 + (Math.random() < 0.5 ? 1 : 0);   // alone 60 %, three 25 %, four or five 15 %
+      let start = ufoSpot(close);
+      const moon = close && sel.id === 'earth' && sel.close.moons[0];
+      if (moon && Math.random() < 0.5 && !(moon.sd < 0 && moon.sx * moon.sx + moon.sy * moon.sy < 1)) {   // dart away from the Moon toward the limb
+        const ms = [closeCx + moon.sx * ufoK(), closeCy + moon.sy * ufoK()];
+        if (inView(...ms)) { start = ms; u.z = 1.4; u.toLimb = true; }
+      }
+      const rgb = pickW(ORB_COL), lineUp = Math.random() < 0.5, gap = rnd(12, 28) * px;
+      Object.assign(u, { life: rnd(8, 14), inDur: 1.2, base: at(...start), phase: 'hover', pt: rnd(3, 6), darts: 0, nd: Math.random() < 0.5 ? 2 : 1,
+        m: Array.from({ length: n }, (_, k) => ({ o: k === 0 ? [0, 0] : lineUp ? [k * gap, k * gap * 0.3] : [Math.cos(k * 2.1) * gap * (1 + (k >> 1) * 0.6), Math.sin(k * 2.1) * gap],
+          s: k === 0 ? 2.4 : rnd(1.6, 2.2), f: rnd(0.6, 1.4) * TAU, ph: rnd(0, TAU), lag: k === 0 ? 0 : rnd(0.06, 0.12), rgb })) });
+      if (close && Math.hypot(...u.base) < 1.1) u.z = 1.4;
+    } else if (type === 'tictac') {
+      const s0 = close ? (() => { const a = rnd(0, TAU), r = rnd(1.15, 1.6); return [closeCx + Math.cos(a) * r * ufoK(), closeCy + Math.sin(a) * r * ufoK()]; })() : ufoSpot(false);
+      Object.assign(u, { life: rnd(8, 14), inDur: 0.6, pos: at(...(inView(...s0) ? s0 : ufoSpot(close))), ang: rnd(-0.4, 0.4), phase: 'hover', pt: rnd(2, 4), jumps: 1 + (Math.random() * 3 | 0) });
+      if (close && Math.hypot(...u.pos) < 1.1) u.z = 1.4;
+    } else if (type === 'triangle') {
+      const v = (close ? 18 : rnd(18, 35)) * px, life = rnd(14, 20), hang = rnd(3, 5), dist = v * (life - hang - 1);
+      let c, dir;
+      if (close) {   // glide in front of the lit disc, so it shows as a dark silhouette
+        const Mc = closeCam(), Lw = ufoLw(), lx = Mc[0] * Lw[0] + Mc[2] * Lw[2], ly = Mc[3] * Lw[0] + Mc[5] * Lw[2], ll = Math.hypot(lx, ly) || 1;
+        c = [lx / ll * 0.45 + rnd(-0.15, 0.15), ly / ll * 0.45 + rnd(-0.15, 0.15)]; u.z = 1.3;
+      } else c = at(...ufoSpot(false));
+      const a = rnd(0, TAU); dir = [Math.cos(a), Math.sin(a) * 0.5];
+      const dl = Math.hypot(...dir); dir = [dir[0] / dl, dir[1] / dl];
+      Object.assign(u, { life, inDur: 1.2, outDur: 0.8, hang, v, dir, pos: [c[0] - dir[0] * dist / 2, c[1] - dir[1] * dist / 2], head: rnd(0, TAU), squash: rnd(0.5, 0.65) });
+    } else if (type === 'saucer') {
+      const dirx = Math.random() < 0.5 ? 1 : -1, y0 = close ? closeCy + rnd(-0.9, 0.9) * ufoK() : rnd(0.15, 0.7) * H;
+      Object.assign(u, { life: rnd(6, 10), inDur: 0.3, dirx, v: rnd(90, 150) * px, pos: at(dirx > 0 ? -30 : W + 30, y0), y0: at(0, y0)[1],
+        slope: rnd(-0.08, 0.08), amp: rnd(10, 22) * px, skips: rnd(4, 6), climb: Math.random() < 0.5 });
+      u.x0 = u.pos[0];
+    } else if (type === 'cube') {
+      Object.assign(u, { life: rnd(10, 16), inDur: 2, pos: at(...ufoSpot(close)), z: 1 });
+    } else if (type === 'gimbal') {
+      let p0 = ufoSpot(close);
+      if (close) p0 = [closeCx + rnd(-0.8, 0.8) * ufoK(), Math.max(H * 0.1, closeCy - rnd(1.3, 1.8) * ufoK())];   // high above the planet
+      Object.assign(u, { life: rnd(12, 18), inDur: 1.5, outDur: 2, pos: at(...p0), v: -rnd(12, 20) * px, vy: rnd(-3, 3) * px, rot0: rnd(-0.5, 0.5), turn: Math.PI / 2 + rnd(-0.2, 0.2), z: 1 });
+    }
+    return u;
+  }
+  const ufoLw = () => { const [wx, , wz] = planetPos(sel), wl = Math.hypot(wx, wz) || 1; return [-wx / wl, 0, -wz / wl]; };
+  function ufoAlpha(u) { return Math.min(1, u.age / u.inDur) * (u.out === undefined ? 1 : Math.max(0, 1 - (u.age - u.out) / u.outDur)); }
+  const exitAt = (u, dur) => { if (u.out === undefined) { u.out = u.age; u.outDur = dur; } };
+  const STEP = {
+    orb(u, dt, t) {
+      for (const m of u.m) { m.o[0] += Math.sin(t * 0.7 + m.ph) * 4 * dt * (u.close ? 1 / ufoK() : 1); m.o[1] += Math.cos(t * 0.5 + m.ph) * 4 * dt * (u.close ? 1 / ufoK() : 1); }
+      u.pt -= dt;
+      if (u.phase === 'hover' && u.pt <= 0) {
+        if (u.darts < u.nd && u.age < u.life - 1) {
+          let to;
+          if (u.toLimb && !u.darts) { const a = Math.atan2(u.base[1], u.base[0]) + rnd(-0.6, 0.6), r = rnd(1.1, 1.5); to = [Math.cos(a) * r, Math.sin(a) * r]; }
+          else for (let k = 0; k < 12; k++) {
+            const a = rnd(0, TAU), d = rnd(150, 400) * (u.close ? 1 / ufoK() : 1);
+            to = [u.base[0] + Math.cos(a) * d, u.base[1] + Math.sin(a) * d];
+            if (inView(...ufoScr(u, to), 0.08)) break;
+          }
+          Object.assign(u, { phase: 'dart', from: u.base.slice(), to, dt0: u.age, darts: u.darts + 1 });
+        } else if (u.out === undefined) { if (Math.random() < 0.5) u.blink = u.age; else exitAt(u, 1.5); }
+      }
+      if (u.phase === 'dart' && u.age - u.dt0 > 0.25 + 0.12) { u.base = u.to.slice(); u.phase = 'hover'; u.pt = rnd(2, 4); }
+      if (u.age > u.life && u.out === undefined && !u.blink) exitAt(u, 1.5);
+    },
+    tictac(u, dt) {
+      u.pt -= dt;
+      if (u.phase === 'hover' && u.pt <= 0) {
+        if (u.jumps-- > 0 && u.age < u.life - 1) {
+          let a, b, c;
+          for (let k = 0; k < 16; k++) {   // an L-shaped jump with a hard 90° corner
+            const q = rnd(0, TAU), l1 = rnd(200, 450) * (u.close ? 1 / ufoK() : 1), l2 = rnd(120, 300) * (u.close ? 1 / ufoK() : 1) * (Math.random() < 0.5 ? 1 : -1);
+            a = u.pos.slice(); b = [a[0] + Math.cos(q) * l1, a[1] + Math.sin(q) * l1]; c = [b[0] - Math.sin(q) * l2, b[1] + Math.cos(q) * l2];
+            if (inView(...ufoScr(u, b), 0.05) && inView(...ufoScr(u, c), 0.08)) break;
+          }
+          Object.assign(u, { phase: 'jump', path: [a, b, c], j0: u.age });
+        } else { u.phase = 'leave'; u.l0 = u.age; const q = rnd(0, TAU); u.vd = [Math.cos(q), Math.sin(q)]; u.lp = u.pos.slice(); }
+      }
+      if (u.phase === 'jump') {
+        const e = u.age - u.j0, [a, b, c] = u.path;
+        if (e < 0.18) { const k = ease3(e / 0.18); u.pos = [lerp(a[0], b[0], k), lerp(a[1], b[1], k)]; }
+        else if (e < 0.33) { const k = ease3((e - 0.18) / 0.15); u.pos = [lerp(b[0], c[0], k), lerp(b[1], c[1], k)]; }
+        else { u.pos = c.slice(); u.phase = 'hover'; u.pt = rnd(2, 4); }
+      }
+      if (u.phase === 'leave') {   // accelerates off at 20 000 px/s²
+        const e = u.age - u.l0, d = 0.5 * 20000 * e * e * (u.close ? 1 / ufoK() : 1);
+        u.pos = [u.lp[0] + u.vd[0] * d, u.lp[1] + u.vd[1] * d];
+        if (e > 0.5) exitAt(u, 0.05);
+      }
+      if (u.age > u.life + 1 && u.phase === 'hover') { u.jumps = 0; u.pt = 0; }
+    },
+    triangle(u, dt) {
+      const h0 = u.life * 0.5 - u.hang / 2, h1 = u.life * 0.5 + u.hang / 2;
+      const vf = u.age < h1 ? 1 - ease3(clamp(u.age - (h0 - 1), 0, 1)) : ease3(clamp(u.age - h1, 0, 1));   // eases to a hover and back
+      u.pos[0] += u.dir[0] * u.v * vf * dt; u.pos[1] += u.dir[1] * u.v * vf * dt;
+      u.head += 2 * DEG * dt;
+      const off = u.life - 1.6;   // lights go out one by one, then the body fades
+      u.lights = Math.min(4, Math.floor(u.age / 0.25), u.age > off ? 4 - Math.floor((u.age - off) / 0.2) : 4);
+      if (u.age > off + 0.8) exitAt(u, 0.8);
+    },
+    saucer(u, dt, t) {
+      u.pos[0] += u.dirx * u.v * dt;
+      const p = u.age / u.life, sk = Math.abs(Math.sin(Math.PI * p * u.skips));
+      u.pos[1] = u.y0 + u.slope * (u.pos[0] - u.x0) - u.amp * sk;
+      u.tilt = (0.12 * Math.sin(t * 5) + 0.15 * Math.exp(-sk * sk * 40)) * u.dirx;   // "like a saucer skipped across water"
+      if (u.age > u.life) {
+        if (u.climb) { const e = (u.age - u.life) / 0.7; u.tilt = lerp(u.tilt, -0.5 * u.dirx, Math.min(1, e * 3)); u.shrink = Math.max(0, 1 - e); u.pos[1] -= 60 * dt * (u.close ? 1 / ufoK() : 1); if (e >= 1) exitAt(u, 0.05); }
+        else exitAt(u, 0.5);
+      }
+      const [x] = ufoScr(u, u.pos); if ((u.dirx > 0 && x > W + 40) || (u.dirx < 0 && x < -40)) exitAt(u, 0.05);
+    },
+    cube(u, dt, t) {
+      u.bob = Math.sin(t * 1.3) * 0.5;
+      if (u.age > u.life) { u.sph = Math.max(0, 1 - (u.age - u.life) / 0.4); if (u.sph === 0 && !u.blink) u.blink = u.age; }
+    },
+    gimbal(u, dt) {
+      u.pos[0] += u.v * dt; u.pos[1] += u.vy * dt;
+      u.rot = u.rot0 + ease3(clamp((u.age - 0.4 * u.life) / 3, 0, 1)) * u.turn;
+      if (u.age > u.life) exitAt(u, 2);
+    },
+  };
+  function ufoLight(u, x, y, q) {   // on-screen light direction; null over Earth's night side (hull unlit)
+    if (!u.close) { const lx = SUN.sx - x, ly = SUN.sy - y, l = Math.hypot(lx, ly) || 1; return [lx / l, ly / l]; }
+    const Mc = closeCam(), Lw = ufoLw(), L = [Mc[0] * Lw[0] + Mc[2] * Lw[2], Mc[3] * Lw[0] + Mc[5] * Lw[2], Mc[6] * Lw[0] + Mc[8] * Lw[2]];
+    const r2 = q[0] * q[0] + q[1] * q[1];
+    if (sel.id === 'earth' && r2 < 1 && q[0] * L[0] + q[1] * L[1] + Math.sqrt(1 - r2) * L[2] < 0) return null;
+    const l = Math.hypot(L[0], L[1]) || 1; return [L[0] / l, L[1] / l];
+  }
+  function nearLabel(x, y) {   // keep clear of station dots and labels: fade out within ~60 px
+    let d = Infinity;
+    if (closeK === 1 && sel && sel.close.satl) for (const st of sel.close.satl.stations) {
+      if (st.sd < 0 && st.sx * st.sx + st.sy * st.sy < 1) continue;
+      d = Math.min(d, Math.hypot(closeCx + st.sx * ufoK() - x, closeCy + st.sy * ufoK() - y));
+    }
+    if (closeK === 1 && sel && namesAll()) for (const m of sel.close.moons) d = Math.min(d, Math.hypot(closeCx + m.sx * ufoK() + 30 - x, closeCy + m.sy * ufoK() - y));
+    if (closeK === 0 && nameMode !== 'none') for (const b of BODIES) d = Math.min(d, Math.hypot(b.sx + 20 - x, b.sy - y) - 10);
+    return clamp((d - 30) / 30, 0, 1);
+  }
+  function capsule(L, h) { const r = h / 2; ctx.beginPath(); ctx.moveTo(-L / 2 + r, -r); ctx.lineTo(L / 2 - r, -r); ctx.arc(L / 2 - r, 0, r, -Math.PI / 2, Math.PI / 2); ctx.lineTo(-L / 2 + r, r); ctx.arc(-L / 2 + r, 0, r, Math.PI / 2, Math.PI * 1.5); ctx.closePath(); }
+  function drawOrb(x, y, s, a, rgb, ph) {
+    const p = 0.82 + 0.18 * Math.sin(ph);
+    ctx.globalCompositeOperation = 'lighter';
+    spot(x, y, s * 7, rgb, a * 0.45 * p); spot(x, y, s * 2.2, rgb, a * 0.8); spot(x, y, s * 1.1, '255,252,240', a * 0.85);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function drawTicTac(x, y, s, ang, a, L) {
+    const len = s * 2.6, h = s; ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = a;
+    if (L) {
+      const la = Math.atan2(L[1], L[0]) - ang, gx = Math.cos(la) * h / 2, gy = Math.sin(la) * h / 2;
+      const g = ctx.createLinearGradient(gx, gy, -gx, -gy);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.55, '#d9dde3'); g.addColorStop(1, '#6d737c'); ctx.fillStyle = g;
+    } else ctx.fillStyle = '#20242a';
+    capsule(len, h); ctx.fill(); ctx.restore();
+    if (L) { ctx.globalCompositeOperation = 'lighter'; spot(x, y, s * 3.2, '235,242,255', a * 0.22); }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+  function drawTriangle(x, y, s, head, squash, a, t, lights) {
+    const P = [0, 1, 2].map(k => { const q = head + k * TAU / 3; return [x + Math.cos(q) * s, y + Math.sin(q) * s * squash]; });
+    ctx.globalAlpha = a; ctx.fillStyle = 'rgba(7,8,11,0.94)'; ctx.strokeStyle = 'rgba(140,150,170,0.28)'; ctx.lineWidth = 0.8; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(...P[0]); ctx.lineTo(...P[1]); ctx.lineTo(...P[2]); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineJoin = 'miter';
+    ctx.globalCompositeOperation = 'lighter';
+    P.forEach((p, k) => { if (lights > k) { const ix = x + (p[0] - x) * 0.86, iy = y + (p[1] - y) * 0.86;
+      spot(ix, iy, s * 0.38, '244,246,255', a * 0.8); spot(ix, iy, s * 0.12, '255,255,255', a * 0.85); } });
+    if (lights > 3) { const r = 0.55 + 0.45 * Math.sin(t * TAU * 0.9);
+      spot(x, y, s * 0.42, '255,90,42', a * r * 0.85); spot(x, y, s * 0.12, '255,170,120', a * r * 0.85); }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function drawSaucer(x, y, s, tilt, a, t, L) {
+    const w = s * 2.2, h = s * 0.55; ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.globalAlpha = a;
+    const dome = ctx.createLinearGradient(0, -h * 1.6, 0, 0);
+    if (L) { dome.addColorStop(0, 'rgba(200,225,245,0.95)'); dome.addColorStop(1, 'rgba(90,110,140,0.9)'); } else { dome.addColorStop(0, '#2a2f37'); dome.addColorStop(1, '#16191e'); }
+    ctx.fillStyle = dome; ctx.beginPath(); ctx.ellipse(0, -h * 0.35, w * 0.3, h * 1.15, 0, Math.PI, TAU); ctx.fill();
+    if (L) {
+      const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, '#e6e9ee'); g.addColorStop(0.45, '#a4aab3'); g.addColorStop(0.55, '#5a5f68'); g.addColorStop(1, '#25282e');
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = '#20242a';
+    ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, 0, TAU); ctx.fill();
+    if (L) {   // sheen on the sunward side
+      const lx = L[0] * Math.cos(tilt) + L[1] * Math.sin(tilt), sh = ctx.createLinearGradient(-w, 0, w, 0), k = lx > 0 ? 1 : 0;
+      sh.addColorStop(k, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1 - k, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = sh; ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation = 'lighter';
+    const c = Math.cos(tilt), sn = Math.sin(tilt);
+    for (let i = 0; i < 10; i++) {   // rim lights chasing round the front half, every third one amber
+      const q = i / 10 * TAU + t * 2.4; if (Math.sin(q) < -0.1) continue;
+      const px = Math.cos(q) * w * 0.92, py = Math.sin(q) * h * 0.55 + h * 0.05, on = (i + Math.floor(t * 6)) % 3 === 0;
+      spot(x + px * c - py * sn, y + px * sn + py * c, s * (on ? 0.5 : 0.3), on ? '255,210,122' : '255,250,235', a * (on ? 0.85 : 0.55));
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+  function drawCube(x, y, s, t, a, sph) {
+    if (sph > 0) {
+      const r = s * sph;
+      ctx.globalCompositeOperation = 'lighter'; spot(x, y, r * 2.6, '170,200,255', a * 0.35); ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = a; const sg = ctx.createRadialGradient(x, y, r * 0.6, x, y, r);
+      sg.addColorStop(0, 'rgba(160,190,240,0.05)'); sg.addColorStop(0.85, 'rgba(190,215,255,0.3)'); sg.addColorStop(1, 'rgba(225,238,255,0.65)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(220,235,255,0.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    ctx.globalAlpha = a;
+    const c = s * 0.42, ay = t * 0.35, ax = 0.55, V = [];
+    for (const i of [-1, 1]) for (const j of [-1, 1]) for (const k of [-1, 1]) {
+      const X = i * c, Y = j * c, Z = k * c, x1 = X * Math.cos(ay) + Z * Math.sin(ay), z1 = -X * Math.sin(ay) + Z * Math.cos(ay);
+      V.push([x + x1, y + Y * Math.cos(ax) - z1 * Math.sin(ax), Y * Math.sin(ax) + z1 * Math.cos(ax)]);
+    }
+    const F = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]];
+    F.map(f => ({ f, z: f.reduce((s, i) => s + V[i][2], 0) })).sort((p, q) => p.z - q.z).forEach(({ f }, n) => {
+      ctx.fillStyle = ['#0c0d10', '#14161a', '#1d2026', '#262a31', '#30343c', '#3a3f48'][n];
+      ctx.beginPath(); f.forEach((i, m) => m ? ctx.lineTo(V[i][0], V[i][1]) : ctx.moveTo(V[i][0], V[i][1])); ctx.closePath(); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+  function drawGimbal(x, y, s, rot, a) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a * 0.9; ctx.drawImage(glowSprite('240,244,250'), -s * 3.2, -s * 1.6, s * 6.4, s * 3.2);
+    ctx.globalAlpha = a * 0.6; ctx.drawImage(glowSprite('240,244,250'), -s * 1.2, -s * 2.4, s * 2.4, s * 4.8);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a;
+    ctx.fillStyle = '#0d0f13'; ctx.beginPath(); ctx.ellipse(0, 0, s * 1.3, s * 0.42, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#1a1d23'; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.38, s * 0.62, 0, 0, TAU); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  const DRAW = {
+    orb(u, a, t) {
+      for (const m of u.m) {   // members follow a dart with a short stagger; three fading ghosts trail each dart
+        const at = e => { if (u.phase !== 'dart') return u.base; const k = ease3(clamp((u.age - u.dt0 - m.lag - e) / 0.25, 0, 1)); return [lerp(u.from[0], u.to[0], k), lerp(u.from[1], u.to[1], k)]; };
+        const ghosts = u.phase === 'dart' ? [[0.06, 0.3], [0.12, 0.18], [0.18, 0.08]] : [];
+        for (const [e, ga] of [[0, 1], ...ghosts]) {
+          const b = at(e), q = [b[0] + m.o[0], b[1] + m.o[1], u.z];
+          if (ufoHidden(u, q)) continue;
+          const [x, y] = ufoScr(u, q), k = a * ga * nearLabel(x, y);
+          if (k > 0) drawOrb(x, y, m.s * u.uk, k, m.rgb, fxT * m.f + m.ph);
+        }
+      }
+    },
+    tictac(u, a) {
+      const n = u.phase === 'leave' ? 5 : 1;
+      for (let g = 0; g < n; g++) {   // on the way out: four ghost capsules back along the velocity
+        const e = Math.max(0, u.age - u.l0 - g * 0.02), d = 0.5 * 20000 * e * e * (u.close ? 1 / ufoK() : 1);
+        const q = g ? [u.lp[0] + u.vd[0] * d, u.lp[1] + u.vd[1] * d] : u.pos;
+        if (ufoHidden(u, q)) continue;
+        const [x, y] = ufoScr(u, q), ga = [1, 0.25, 0.15, 0.08, 0.04][g];
+        const jit = u.phase === 'hover' ? [rnd(-0.4, 0.4), rnd(-0.4, 0.4)] : [0, 0], yaw = u.phase === 'hover' ? 6 * DEG * Math.sin(fxT * TAU * 0.3) : 0;
+        drawTicTac(x + jit[0], y + jit[1], 6 * u.uk, u.ang + yaw, a * ga * nearLabel(x, y), ufoLight(u, x, y, q));
+      }
+    },
+    triangle(u, a, t) {
+      if (ufoHidden(u, u.pos)) return;
+      const [x, y] = ufoScr(u, u.pos);
+      drawTriangle(x, y, 15 * u.uk, u.head, u.squash, a * nearLabel(x, y), t, u.lights ?? 0);
+    },
+    saucer(u, a, t) {
+      if (ufoHidden(u, u.pos)) return;
+      const [x, y] = ufoScr(u, u.pos), s = 8 * u.uk * (u.shrink ?? 1);
+      if (s > 0.3) drawSaucer(x, y, s, u.tilt || 0, a * nearLabel(x, y), t, ufoLight(u, x, y, u.pos));
+    },
+    cube(u, a, t) {
+      const [x, y] = ufoScr(u, u.pos);
+      drawCube(x, y + (u.bob || 0), 9 * u.uk, t, a * nearLabel(x, y), u.sph ?? 1);
+    },
+    gimbal(u, a) {
+      if (ufoHidden(u, u.pos)) return;
+      const [x, y] = ufoScr(u, u.pos);
+      drawGimbal(x, y, 7 * u.uk, u.rot || u.rot0, a * nearLabel(x, y));
+    },
+  };
+  function ufoFrame(t, dt) {
+    const close = closeK === 1 && sel && !sel.isSun, over = closeK === 0 && farK() < 0.3;
+    if (!ufo) {
+      if (t < ufoNext || !(close || over)) return;
+      ufo = spawnUfo(UFO_FORCE || pickW(UFO_W), close);
+      ufoNext = t + (UFO_FORCE ? 30 : FX_WALL ? rnd(150, 360) : rnd(420, 900));
+    }
+    const u = ufo;
+    if (u.close ? !(closeK > 0 && sel && !sel.isSun) : closeK === 1) { ufo = null; return; }   // its view is gone
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    u.age += dt;
+    STEP[u.type](u, dt, t);
+    if (u.blink !== undefined) {   // blink-out: a short white flash, then gone
+      const q = u.pos || [u.base[0] + u.m[0].o[0], u.base[1] + u.m[0].o[1]];
+      if (!ufoHidden(u, [q[0], q[1], u.z])) { const [x, y] = ufoScr(u, q); ctx.globalCompositeOperation = 'lighter'; spot(x, y, 2.4 * u.uk * 5, '255,255,255', 0.7); ctx.globalCompositeOperation = 'source-over'; }
+      if (u.age - u.blink > 0.07) ufo = null;
+      return;
+    }
+    const a = ufoAlpha(u);
+    if (a <= 0 || u.age > u.life + 3) { ufo = null; return; }
+    DRAW[u.type](u, a, t);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
 
   // ---------- frame loop ----------
@@ -2608,7 +3184,9 @@
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
     const dDays = speed * dt;
     days += dDays; frameDays = dDays;
+    fxDt = speed === 0 ? 0 : dt; fxT += fxDt;   // UFOs and meteors run on real time; «Пауза» freezes them
     if (GLR) pumpTextures(closeK > 0 ? 10 : 5);
+    if (FX_ON) skyStep(fxDt);
 
     // transition between overview and close-up
     closeK = clamp(closeTarget ? closeK + dt / 1.3 : closeK - dt / 0.9, 0, 1);
@@ -2637,10 +3215,11 @@
         ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
       }
     };
-    if (closeK < 1) { drawStars(1); drawOverview(closeK > 0 ? 0 : dDays); }
+    if (closeK < 1) { drawStars(1); if (showMeteors) drawSkyMeteors(1); drawOverview(closeK > 0 ? 0 : dDays); }
     if (closeK > 0 && sel) {
       ctx.globalAlpha = e; ctx.drawImage(sel.isSun ? bgSun : bgClose, 0, 0, W, H); ctx.globalAlpha = 1;
       drawStars(e);
+      if (showMeteors) drawSkyMeteors(e);
       if (showConst) drawConstellations(closeCam(), e);
       closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
       // the close-up grows out of the body's spot in the overview
@@ -2660,6 +3239,7 @@
         edgeMarker(cxp + (Mc[0] * wx + Mc[2] * wz) * k, cyp + (Mc[3] * wx + Mc[5] * wz) * k, 'УЭББ · L2, 1,5 МЛН КМ', '#ffd27a', e);
       }
     }
+    if (showUfo) ufoFrame(fxT, fxDt);
 
     const ds = (closeTarget ? (speed > 0 && speed < 0.002 ? fmtSec : fmtTime) : fmtDay).format(new Date(J2000 + days * 86400000));
     if (ds !== lastDateStr) { dateEl.textContent = ds; lastDateStr = ds; }

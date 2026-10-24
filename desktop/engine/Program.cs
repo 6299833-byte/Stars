@@ -178,6 +178,7 @@ sealed class Engine : ApplicationContext
     {
         type = "config", fps = settings.Fps, sky = w.Monitor.Scene, view = w.Monitor.View,
         panel = settings.ShowPanel && w.Monitor.Panel != false,
+        ufo = settings.Ufo, meteors = settings.Meteors,
     }, Json);
 
     // Tray → Экраны → one submenu per monitor: background (which galaxy), view, panel.
