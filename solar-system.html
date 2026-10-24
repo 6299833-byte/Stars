@@ -193,11 +193,11 @@
   <div id="pane-about" role="tabpanel" class="about" hidden>
     <p class="lead">Модель Солнечной системы: планеты на своих местах на сегодняшнюю дату, их спутники, кольца, астероиды, кометы, станции и зонды.</p>
     <p><b>Фоновые снимки.</b> Скопление галактик Девы, туманности Лагуна и Трёхраздельная, <a href="https://rubinobservatory.org/gallery/image-releases/rubins-cosmos" target="_blank" rel="noopener">Rubin’s Cosmos</a>.<br>
-      © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом. «Космические утёсы» в туманности Киля — снимок телескопа «Джеймс Уэбб» (NIRCam): NASA, ESA, CSA, STScI.</p>
+      © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом. «Космические утёсы» в туманности Киля — снимок телескопа «Джеймс Уэбб» (NIRCam): NASA, ESA, CSA, STScI. Крабовидная туманность — мозаика «Хаббла»: NASA, ESA, J. Hester, A. Loll (ASU).</p>
     <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
     <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
-    <p><b>Луна.</b> Восточные три четверти видимой стороны — «минеральная Луна» астрофотографа, используется с разрешения автора: цвета усилены, синие моря богаты титаном, рыжие — железом. Западный край дорисован по карте морей и кратеров в тех же тонах.</p>
-    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Америки — «Голубой шарик» 2012 года со спутника Suomi NPP (NASA, общественное достояние); восточная часть Тихого океана — снимок с «Аполлона» в обработке Тоби Орда (tobyord.com/earth). Западная часть Тихого океана заполнена облаками и морем с соседнего снимка. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
+    <p><b>Луна.</b> Видимая сторона — полная Луна по данным зонда Lunar Reconnaissance Orbiter (NASA/GSFC/Arizona State University, общественное достояние). Цвета морей взяты с «минеральной Луны» астрофотографа (с разрешения автора) и усилены: синие моря богаты титаном, рыжие — железом.</p>
+    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Америки, Африка, Аравия и Индия — «Голубой шарик» 2012 года со спутника Suomi NPP (NASA, общественное достояние); восточная часть Тихого океана — снимок с «Аполлона» в обработке Тоби Орда (tobyord.com/earth). Западная часть Тихого океана заполнена облаками и морем с соседнего снимка. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
     <p><small>Поверхности остальных планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
   </div>
 </section>
@@ -286,14 +286,15 @@
   const bgCanvas = document.createElement('canvas'), bgClose = document.createElement('canvas'), bgSun = document.createElement('canvas');
   let skyMode = 'cluster';
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
-  const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), cliffs: new Image(), earth: new Image() };
+  const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), cliffs: new Image(), crab: new Image(), earth: new Image() };
   photos.earth.src = 'img/earth-apollo17.jpg';
-  const earthIndian = new Image(), earthAtlantic = new Image(), earthPacific = new Image(), earthAmericas = new Image();
-  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg'; earthPacific.src = 'img/earth-apollo-pacific.jpg'; earthAmericas.src = 'img/earth-bm2012-americas.jpg';
+  const earthIndian = new Image(), earthAtlantic = new Image(), earthPacific = new Image(), earthAmericas = new Image(), earthEast = new Image();
+  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg'; earthPacific.src = 'img/earth-apollo-pacific.jpg'; earthAmericas.src = 'img/earth-bm2012-americas.jpg'; earthEast.src = 'img/earth-bm2012-east.jpg';
   photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
   photos.nebula.src = 'img/rubin-trifid-lagoon.jpg';
+  photos.crab.src = 'img/hubble-crab.jpg';   // Hubble mosaic of the Crab Nebula (PIA03606: NASA, ESA, J. Hester, A. Loll)
   photos.cliffs.src = 'img/webb-cosmic-cliffs.jpg';   // JWST NIRCam, NGC 3324 in the Carina Nebula: NASA, ESA, CSA, STScI
   for (const k in photos) photos[k].onload = () => resetStars();
   const ready = im => im.complete && im.naturalWidth > 0;
@@ -422,12 +423,13 @@
     if (skyMode === 'nebula' && ready(photos.nebula)) photoSky(bgCanvas, photos.nebula, 0.62, 0.55, 0.72);
     else if (skyMode === 'field' && ready(photos.field)) photoSky(bgCanvas, photos.field, 0.5, 0.5, 0.35);
     else if (skyMode === 'cliffs' && ready(photos.cliffs)) photoSky(bgCanvas, photos.cliffs, 0.5, 0.42, 0.62);
+    else if (skyMode === 'crab' && ready(photos.crab)) photoSky(bgCanvas, photos.crab, 0.5, 0.5, 0.7);
     else if (ready(photos.cluster)) photoSky(bgCanvas, photos.cluster, 0.3, 0.45, 0.6);
     // the Sun's close-up sits in front of the Lagoon and Trifid nebulae
     if (ready(photos.nebula)) photoSky(bgSun, photos.nebula, 0.62, 0.55, 0.74);
     else { bgSun.width = bgCanvas.width; bgSun.height = bgCanvas.height; bgSun.getContext('2d').drawImage(bgCanvas, 0, 0); }
     // planet close-ups follow the chosen background, so each screen of a multi-monitor desktop keeps its own sky
-    const closePhoto = { cluster: [photos.spiral, 0.15, 0.3, 0.72], nebula: [photos.nebula, 0.3, 0.4, 0.9], field: [photos.field, 0.35, 0.6, 0.5], cliffs: [photos.cliffs, 0.62, 0.3, 0.6] }[skyMode];
+    const closePhoto = { cluster: [photos.spiral, 0.15, 0.3, 0.72], nebula: [photos.nebula, 0.3, 0.4, 0.9], field: [photos.field, 0.35, 0.6, 0.5], cliffs: [photos.cliffs, 0.62, 0.3, 0.6], crab: [photos.crab, 0.3, 0.3, 0.75] }[skyMode];
     if (closePhoto && ready(closePhoto[0])) photoSky(bgClose, ...closePhoto, true);
     else if (ready(photos.spiral)) photoSky(bgClose, photos.spiral, 0.15, 0.3, 0.72, true);
     else { bgClose.width = bgCanvas.width; bgClose.height = bgCanvas.height; bgClose.getContext('2d').drawImage(bgCanvas, 0, 0); }
@@ -1927,6 +1929,9 @@
     { im: earthPacific, n: 1024, cx: 512.6, cy: 512.2, r: 510.9, lat0: 32.99, lon0: -111.13, rho: 20.92, D: 6.45, east: 0.6 },
     // NASA's Blue Marble 2012 (Suomi NPP VIIRS, public domain): the Americas fully lit, the sharpest of the set, so it
     // outweighs the others where they overlap; camera fitted to Baja California, the Salton Sea, Florida and Cuba (rms ≈ 0.6°)
+    // Blue Marble 2012, eastern hemisphere (NASA, public domain): Africa, Arabia, India; some sunglint stripes over the
+    // ocean, so it only shares the weight there; camera fitted to Africa's capes, Suez, Hormuz, Madagascar, India (rms ≈ 0.5°)
+    { im: earthEast, n: 1024, cx: 512.0, cy: 512.0, r: 511.8, lat0: -9.99, lon0: 45.21, rho: 0.08, D: 3.316, east: 2, k: 1.5 },
     { im: earthAmericas, n: 1024, cx: 511.94, cy: 511.83, r: 511.94, lat0: 20.78, lon0: -100.10, rho: -0.11, D: 1.334, east: 2, k: 10 },
   ];
   for (const q of EARTH_PHOTOS) {   // camera basis: centre c, image right a, image up b
@@ -2887,13 +2892,13 @@
   window.solarBack = () => { if (!panel.hidden) { setMenu(false); return true; } if (closeTarget === 1 || pendingSel !== undefined || focus) { choose(null); return true; } return false; };   // Android back button
   const skyBtn = document.getElementById('t-sky');
   skyBtn.addEventListener('click', () => {
-    const order = ['cluster', 'nebula', 'field', 'cliffs'];
+    const order = ['cluster', 'nebula', 'field', 'cliffs', 'crab'];
     skyMode = order[(order.indexOf(skyMode) + 1) % order.length];
     setSky(skyMode);
   });
   function setSky(mode) {
     skyMode = mode;
-    skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: Rubin’s Cosmos', cliffs: 'Фон: Космические утёсы (Уэбб)' }[skyMode];
+    skyBtn.textContent = { cluster: 'Фон: скопление Девы', nebula: 'Фон: Лагуна и Трёхраздельная', field: 'Фон: Rubin’s Cosmos', cliffs: 'Фон: Космические утёсы (Уэбб)', crab: 'Фон: Крабовидная туманность (Хаббл)' }[skyMode];
     resetStars();
   }
   const constBtn = document.getElementById('t-const');
@@ -3119,7 +3124,7 @@
     // per-screen choice: background, view and panel, from #wallpaper&sky=nebula&view=saturn&panel=0
     // or from StarsDesktop's {type:'config'} message (one wallpaper window per monitor)
     function applyWall(o) {
-      if (['cluster', 'nebula', 'field', 'cliffs'].includes(o.sky) && o.sky !== skyMode) setSky(o.sky);
+      if (['cluster', 'nebula', 'field', 'cliffs', 'crab'].includes(o.sky) && o.sky !== skyMode) setSky(o.sky);
       if (o.view && o.view !== wallView && (o.view === 'tour' || o.view === 'overview' || o.view === 'far' || BODIES.some(b => b.id === o.view))) {
         wallView = o.view;
         choose(wallView === 'tour' ? null : target(wallView));

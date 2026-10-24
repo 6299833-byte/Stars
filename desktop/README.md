@@ -51,6 +51,7 @@ Outlook в интернете ──(ссылка ICS)──┐
   - туманности Лагуна и Трёхраздельная;
   - Rubin’s Cosmos (поле из тысяч далёких галактик);
   - Космические утёсы — снимок телескопа «Джеймс Уэбб», туманность Киля;
+  - Крабовидная туманность — мозаика «Хаббла», остаток сверхновой 1054 года;
   - **Млечный Путь** — вместо Солнечной системы на экране вся наша Галактика, она медленно вращается и покачивается.
 - **Вид:**
   - облёт планет (по умолчанию);
@@ -69,7 +70,7 @@ Outlook в интернете ──(ссылка ICS)──┐
 ]
 ```
 
-`scene`: `cluster`, `nebula`, `field`, `cliffs`, `milkyway`. `view`: `tour`, `overview`, `sun`, `mercury`, `venus`, `earth`, `mars`, `jupiter`, `saturn`, `uranus`, `neptune`, `far`.
+`scene`: `cluster`, `nebula`, `field`, `cliffs`, `crab`, `milkyway`. `view`: `tour`, `overview`, `sun`, `mercury`, `venus`, `earth`, `mars`, `jupiter`, `saturn`, `uranus`, `neptune`, `far`.
 
 ### Качество и видеокарта
 
