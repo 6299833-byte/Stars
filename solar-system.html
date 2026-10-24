@@ -752,7 +752,7 @@
   const FAR = {
     id: 'far', name: 'За пределами Солнечной системы', isFar: true,
     facts: 'Гелиопауза ≈ 120 а. е. · облако Оорта ≈ 2 000–100 000 а. е. · Проксима Центавра 4,24 св. года · масштаб логарифмический',
-    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — а за ним ближайшие звёзды. Нажми на звезду, чтобы подлететь к её планетной системе.',
+    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м; пунктиры — пути пяти зондов, улетающих к звёздам. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — сквозь него прошли межзвёздные гости Оумуамуа, Борисов и 3I/ATLAS. Солнце летит сквозь Местное межзвёздное облако к Геркулесу, внутри Местного пузыря горячего газа, и вместе с Галактикой обходит её центр. Нажми на звезду, чтобы подлететь к её планетной системе.',
   };
   const heliRadius = cosTheta => 120 * Math.pow(1 + 1.1 * (1 - cosTheta), 1.5);   // nose 120 AU, flanks ~180, tail ~400+
   const helio = [], oort = [];
@@ -859,6 +859,39 @@
     ctx.globalAlpha = 1;
   }
 
+  // galactic coordinates -> direction on this page's axes (J2000 galactic pole RA 192.86°, Dec 27.13°)
+  const galDir = (l, b) => {
+    const lr = l * DEG, br = b * DEG, dG = 27.12825 * DEG, aG = 192.85948 * DEG, lN = 122.93192 * DEG;
+    const sd = Math.sin(br) * Math.sin(dG) + Math.cos(br) * Math.cos(dG) * Math.cos(lN - lr);
+    const a = aG + Math.atan2(Math.cos(br) * Math.sin(lN - lr), Math.sin(br) * Math.cos(dG) - Math.cos(br) * Math.sin(dG) * Math.cos(lN - lr));
+    return raDec(a / DEG / 15, Math.asin(sd) / DEG);
+  };
+  // Our neighbourhood in the Galaxy, schematic: the Sun sits at the edge of the Local Interstellar Cloud, next to the
+  // G cloud around Alpha Centauri, inside the Local Bubble of hot thin gas, near the plane of the Milky Way.
+  const APEX = raDec(18, 30);                              // the Sun moves this way, 19.5 km/s (to Hercules, near Vega)
+  const GC = galDir(0, 0), GROT = galDir(90, 0);           // to the galactic centre; the direction of our orbit around it
+  const lic = [], bubble = [], milky = [];
+  {
+    const cloud = (c, r, n, col, out) => { for (let i = 0; i < n; i++) {
+      const u = rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u), rr = r * Math.cbrt(Math.random());
+      out.push({ p: [c[0] + q * Math.cos(ph) * rr, c[1] + u * rr * 0.7, c[2] + q * Math.sin(ph) * rr], r: rnd(1.6, 4.2), col, o: rnd(0.025, 0.06) });
+    } };
+    const ac = raDec(14.66, -60.83), anti = galDir(180, 0);
+    cloud(anti.map(v => v * 9), 12, small ? 26 : 40, '150,185,255', lic);       // Local Interstellar Cloud: the Sun ~3 units inside its edge
+    cloud(ac.map(v => v * 17), 8, small ? 18 : 28, '200,165,255', lic);         // G cloud: Alpha Centauri is inside it
+    lic.labels = [anti.map(v => v * 13), ac.map(v => v * 21)];
+    for (let i = 0; i < (small ? 700 : 1200); i++) {                            // the Local Bubble's cold wall, ~300 light years
+      const u = rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u), v = [q * Math.cos(ph), u, q * Math.sin(ph)];
+      const rr = 34 * (1 + 0.18 * Math.sin(3 * ph + 1) * Math.cos(2 * u) + 0.1 * gauss());   // lumpy, not a sphere
+      bubble.push({ p: v.map(x => x * rr), c: pick(['#c88a6a', '#a87060', '#d8a080']), o: rnd(0.12, 0.35), s: 1.3 });
+    }
+    for (let i = 0; i < (small ? 2200 : 4000); i++) {                           // the Milky Way's disc around us, brighter toward its centre
+      const l = rnd(-180, 180); if (Math.random() > 0.35 + 0.65 * Math.pow(Math.cos(l * DEG / 2), 2)) { i--; continue; }
+      const d = galDir(l, gauss() * 3.5 * (1.3 - 0.5 * Math.cos(l * DEG))), rr = rnd(38, 46);
+      milky.push({ p: d.map(x => x * rr), c: pick(['#fff1dc', '#ffe2b8', '#dfe6ff', '#ffd8a8']), o: rnd(0.15, 0.5) * (0.6 + 0.4 * Math.cos(l * DEG / 2)), s: Math.random() < 0.06 ? 2 : 1.2 });
+    }
+  }
+
   const STAR_SYSTEMS = [
     { id: 'alphacen', name: 'Альфа Центавра', ra: 14.66, dec: -60.83, ly: 4.37, col: '#fff1d0', r: 3.8, comp: [{ col: '#ffd59a', sep: 9 }, { col: '#ff8a5c', sep: 26, small: true }],
       planets: [{ name: 'Проксима b', P: 11.19 }, { name: 'Проксима d', P: 5.12 }],
@@ -892,6 +925,24 @@
     { id: 'teegarden', name: 'Звезда Тигардена', ra: 2.888, dec: 16.88, ly: 12.5, col: '#ff5a3a', r: 1.8, planets: [{ name: 'b', P: 4.91 }, { name: 'c', P: 11.4 }, { name: 'd', P: 26.1 }],
       facts: 'Тусклый красный карлик · 12,5 св. года · открыт только в 2003 году',
       note: 'Три планеты земной массы; у b одна из самых высоких оценок сходства с Землёй.' },
+    { id: 'procyon', name: 'Процион', ra: 7.655, dec: 5.22, ly: 11.46, col: '#fff4e0', r: 3.8, comp: [{ col: '#ffffff', sep: 10, small: true }], planets: [],
+      facts: 'Восьмая по яркости звезда неба · 11,5 св. года · жёлто-белая звезда F и белый карлик',
+      note: 'Процион B — белый карлик, остаток звезды, которая раньше была ярче самого Проциона A. Пара обходит общий центр за 41 год. Планет не найдено.' },
+    { id: 'altair', name: 'Альтаир', ra: 19.846, dec: 8.87, ly: 16.7, col: '#eef3ff', r: 3.6, planets: [],
+      facts: 'Белая звезда в Орле · 16,7 св. года · вершина Летнего треугольника',
+      note: 'Делает оборот всего за 9 часов, поэтому сплюснут: экватор на 20 % шире, чем расстояние между полюсами. В 2007 году его поверхность впервые сфотографировали интерферометром.' },
+    { id: 'vega', name: 'Вега', ra: 18.616, dec: 38.78, ly: 25.0, col: '#d2deff', r: 4.2, disc: true, discCol: '#b8c8ff', planets: [],
+      facts: 'Ярчайшая звезда летнего неба · 25 св. лет · эталон звёздной яркости',
+      note: 'В 1983 году спутник IRAS нашёл вокруг неё пылевой диск — первый у другой звезды. Ось её вращения смотрит почти на нас. Через 12 000 лет Вега станет Полярной звездой.' },
+    { id: 'luhman16', name: 'Луман 16', ra: 10.822, dec: -53.32, ly: 6.5, col: '#b0542e', r: 1.6, brown: true, comp: [{ col: '#8a3e24', sep: 6, small: true }], planets: [],
+      facts: 'Пара коричневых карликов · 6,5 св. года · третья по близости к нам система',
+      note: 'Открыта только в 2013 году. Это «несостоявшиеся звёзды» по 30 масс Юпитера: в их недрах не горит водород, а по поверхности бегут облака из раскалённого песка и железа.' },
+    { id: 'wise0855', name: 'WISE 0855', ra: 8.919, dec: -7.24, ly: 7.4, col: '#7a3228', r: 1.3, brown: true, planets: [],
+      facts: 'Самый холодный коричневый карлик · 7,4 св. года · около −20 °C',
+      note: 'Холоднее замёрзшей лужи: в его атмосфере «Уэбб» нашёл водяной лёд и облака. Светит только в инфракрасном свете, глазом его не увидеть. Открыт в 2014 году.' },
+    { id: 'scholz', name: 'Звезда Шольца', ra: 7.334, dec: -8.77, ly: 22.2, col: '#ff5a3a', r: 1.6, comp: [{ col: '#8a3e24', sep: 5, small: true }], planets: [], flyby: 52000,
+      facts: 'Красный карлик с коричневым карликом · 22 св. года · улетает от нас со скоростью 83 км/с',
+      note: 'Около 70 тысяч лет назад прошёл через внешнее облако Оорта, примерно в 52 000 а. е. от Солнца, — ближе всех известных звёзд. Тогда его тусклую красную точку могли видеть наши предки.' },
     { id: 'trappist', name: 'TRAPPIST-1', ra: 23.106, dec: -5.04, ly: 40.7, col: '#ff4a30', r: 1.8,
       planets: ['b', 'c', 'd', 'e', 'f', 'g', 'h'].map((n, i) => ({ name: n, P: [1.51, 2.42, 4.05, 6.1, 9.21, 12.35, 18.77][i] })),
       facts: 'Ультрахолодный красный карлик · 40,7 св. года · размером чуть больше Юпитера',
@@ -905,11 +956,20 @@
     const fk = farK();
     if (fk <= 0) return;
     ctx.globalCompositeOperation = 'lighter';
-    for (const list of [helio, oort]) for (const q of list) {
+    // gas clouds around the Sun: soft blobs, drawn first so everything else sits in them
+    for (const q of lic) {
+      const [x, y, , k] = project(...q.p), r = q.r * zoom * k;
+      if (x < -r || y < -r || x > W + r || y > H + r || r < 2) continue;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${q.col},${(q.o * fk).toFixed(3)})`); g.addColorStop(1, `rgba(${q.col},0)`);
+      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+    for (const list of [milky, bubble, helio, oort]) for (const q of list) {
       const [x, y] = project(...q.p);
       if (x < -4 || y < -4 || x > W + 4 || y > H + 4) continue;
       ctx.globalAlpha = q.o * fk; ctx.fillStyle = q.c; const sz = q.s || 1.1; ctx.fillRect(x, y, sz, sz);
     }
+    drawFarPaths(fk);
     const glow = (x, y, r, col, a) => {
       const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
       g.addColorStop(0, col); g.addColorStop(0.25, col + '88'); g.addColorStop(1, col + '00');
@@ -924,7 +984,7 @@
       glow(x, y, r, st.col, fk);
       for (const c of st.comp || []) glow(x + c.sep * mc, y - c.sep * 0.4 * mc, c.small ? r * 0.45 : r * 0.8, c.col, fk);
       if (st.disc) {   // Epsilon Eridani's two dust belts
-        ctx.strokeStyle = '#ffcf90'; ctx.lineWidth = 2 * mk;
+        ctx.strokeStyle = st.discCol || '#ffcf90'; ctx.lineWidth = 2 * mk;
         for (const rr of [9, 18]) { ctx.globalAlpha = 0.18 * fk; ctx.beginPath(); ctx.ellipse(x, y, rr * mp, rr * 0.45 * mp, -0.3, 0, TAU); ctx.stroke(); }
         ctx.lineWidth = 1;
       }
@@ -960,6 +1020,70 @@
     }
     const [hx, hy] = project(...atAU(NOSE, 125)); label('ГЕЛИОПАУЗА · ≈120 А. Е.', hx + 6, hy, 'rgba(170,215,255,0.85)');
     const [ox, oy] = project(...atAU(eclDir(150, 50), 60000)); label('ОБЛАКО ООРТА', ox, oy, 'rgba(200,215,245,0.75)');
+    const at = (v, txt, col, dx = 6) => { const [x, y, depth] = project(...v); if (depth > -persp * 1.4) label(txt, x + dx, y, col); };
+    at(lic.labels[0], 'МЕСТНОЕ МЕЖЗВЁЗДНОЕ ОБЛАКО', 'rgba(170,200,255,0.8)');
+    at(lic.labels[1], 'ОБЛАКО G', 'rgba(210,185,255,0.8)');
+    at(galDir(140, 25).map(v => v * 35), 'МЕСТНЫЙ ПУЗЫРЬ · ГОРЯЧИЙ ГАЗ · ≈300 СВ. ЛЕТ', 'rgba(230,170,140,0.8)');
+    at(GC.map(v => v * 40), 'К ЦЕНТРУ ГАЛАКТИКИ · 26 000 СВ. ЛЕТ', 'rgba(255,225,180,0.9)');
+    at(GROT.map(v => v * 40), 'ОРБИТА ВОКРУГ ЦЕНТРА · 230 КМ/С · ОБОРОТ ЗА 230 МЛН ЛЕТ', 'rgba(255,225,180,0.8)');
+    at(APEX.map(v => v * 11), 'СОЛНЦЕ ЛЕТИТ К ГЕРКУЛЕСУ · 20 КМ/С', 'rgba(255,214,140,0.9)');
+    at(NOSE.map(v => v * 12.5), 'МЕЖЗВЁЗДНЫЙ ВЕТЕР · 26 КМ/С', 'rgba(170,215,255,0.8)');
+    for (const pr of PROBES) at(probeAt(pr), `${pr.name.toUpperCase()} · ${Math.round(probeAU(pr))} А. Е.`, 'rgba(160,235,255,0.9)');
+    for (const o of SMALL) if (o.kind === 'interstellar' && o.far) at(o.far.from, `${o.name.toUpperCase()} · ПРИЛЕТЕЛ ИЗ: ${o.from}`, 'rgba(255,200,170,0.8)');
+    for (const st of STAR_SYSTEMS) if (st.flyby) at(atAU(raDec(st.ra, st.dec), st.flyby), 'ЗДЕСЬ ПРОШЛА 70 ТЫС. ЛЕТ НАЗАД', 'rgba(255,160,130,0.8)');
+  }
+  // probe trails, interstellar visitors' paths, the Sun's motion, Scholz's star's flyby
+  const arrow = (a, b, col, alpha, w = 1.2) => {
+    const [x0, y0] = project(...a), [x1, y1] = project(...b), ang = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0);
+    if (L < 8) return;
+    ctx.globalAlpha = alpha; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const h = Math.min(9, L * 0.3);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - 0.4), y1 - h * Math.sin(ang - 0.4)); ctx.lineTo(x1 - h * Math.cos(ang + 0.4), y1 - h * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1;
+  };
+  function drawFarPaths(fk) {
+    ctx.globalCompositeOperation = 'lighter';
+    // deep-space probes: a fading trail from the planets out to where each one is today
+    for (const pr of PROBES) {
+      const end = probeAt(pr), [x1, y1] = project(...end), [x0, y0] = project(...atAU(pr.dir, 6));
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, 'rgba(140,230,255,0)'); g.addColorStop(1, `rgba(160,235,255,${(0.75 * fk).toFixed(3)})`);
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.3; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = fk; ctx.fillStyle = '#c8f4ff'; ctx.beginPath(); ctx.arc(x1, y1, 2.2, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.3 * fk; ctx.beginPath(); ctx.arc(x1, y1, 6, 0, TAU); ctx.fill();
+    }
+    // interstellar visitors: where they came from and where they are going, along their hyperbolas' asymptotes
+    for (const o of SMALL) {
+      if (o.kind !== 'interstellar' || !o.far) continue;
+      const now = squeeze(keplerPos(o, days));
+      for (const [far, a0] of [[o.far.from, 0.55], [o.far.to, 0.28]]) {
+        const [x0, y0] = project(...now), [x1, y1] = project(...far);
+        const g = ctx.createLinearGradient(x0, y0, x1, y1);
+        g.addColorStop(0, `rgba(255,190,150,${(a0 * fk).toFixed(3)})`); g.addColorStop(1, 'rgba(255,190,150,0)');
+        ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1; ctx.setLineDash(far === o.far.to ? [2, 4] : []);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // the Sun's own motion and the interstellar wind blowing into the heliosphere
+    arrow(APEX.map(v => v * 1.5), APEX.map(v => v * 10), 'rgba(255,214,140,0.9)', 0.8 * fk, 1.6);
+    arrow(NOSE.map(v => v * 12), NOSE.map(v => v * 8), 'rgba(160,210,255,0.9)', 0.6 * fk);
+    // a dashed line toward the galactic centre, and the way we orbit it
+    const [gx0, gy0] = project(...GC.map(v => v * 12)), [gx1, gy1] = project(...GC.map(v => v * 39));
+    ctx.globalAlpha = 0.35 * fk; ctx.strokeStyle = '#ffe1b4'; ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx1, gy1); ctx.stroke(); ctx.setLineDash([]);
+    arrow(GROT.map(v => v * 33), GROT.map(v => v * 39), 'rgba(255,225,180,0.9)', 0.5 * fk);
+    // Scholz's star: its path back in to its closest pass through the outer Oort cloud
+    for (const st of STAR_SYSTEMS) {
+      if (!st.flyby) continue;
+      const [x0, y0] = project(...st.wpos), [x1, y1] = project(...atAU(raDec(st.ra, st.dec), st.flyby));
+      ctx.globalAlpha = 0.45 * fk; ctx.strokeStyle = '#ff8a6a'; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 0.8 * fk; ctx.fillStyle = '#ff8a6a'; ctx.beginPath(); ctx.arc(x1, y1, 2, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   function drawOverview(dDays) {
@@ -983,7 +1107,7 @@
       if (showSmall) drawSmallBodies();
       const taken = namesOn() && farK() < 0.5 ? drawNamesOverview() : [];
       drawBeyond(taken);
-      if (namesAll()) { drawProbes(taken); if (showSmall) drawSmallLabels(taken); }
+      if (namesAll()) { if (farK() < 0.5) drawProbes(taken); if (showSmall) drawSmallLabels(taken); }
       return;
     }
     drawOrbits();
@@ -1888,7 +2012,12 @@
     { name: 'Вояджер-1', au0: 164.6, rate: 3.57, lon: 255, lat: 35 },
     { name: 'Вояджер-2', au0: 137.7, rate: 3.23, lon: 290, lat: -35 },
     { name: 'Новые горизонты', au0: 60.9, rate: 2.9, lon: 290, lat: 2 },
+    { name: 'Пионер-10', au0: 136, rate: 2.54, lon: 70, lat: 3 },     // toward Aldebaran; silent since 2003
+    { name: 'Пионер-11', au0: 114, rate: 2.37, lon: 287, lat: 13 },   // toward Aquila; silent since 1995
   ];
+  PROBES.forEach(pr => { pr.dir = eclDir(pr.lon, pr.lat); });
+  const probeAU = pr => pr.au0 + pr.rate * (days - 9131.5) / 365.25;   // 9131.5 days = 1 January 2025 from J2000
+  const probeAt = pr => atAU(pr.dir, probeAU(pr));
   function drawProbes(taken) {
     const yrs = (days - 9131.5) / 365.25;   // 9131.5 days = 1 January 2025 from J2000
     for (const pr of PROBES) {
@@ -1952,12 +2081,12 @@
     { id: 'solo', name: 'Solar Orbiter', kind: 'probe', a: 0.6, e: 0.52, i: 17, O: 120, w: 40, col: '#9fe8ff',
       facts: 'Зонд ESA и NASA · орбита около полугода (примерная)', note: 'Наклон его орбиты постепенно растёт, чтобы впервые снять полюса Солнца.' },
     // interstellar visitors: hyperbolic orbits (e > 1) given by perihelion distance q
-    { id: 'oumuamua', name: 'Оумуамуа', kind: 'interstellar', q: 0.2559, e: 1.2011, i: 122.74, O: 24.60, w: 241.81, Tp: [2017, 9, 9], col: '#ffb38a',
+    { id: 'oumuamua', name: 'Оумуамуа', kind: 'interstellar', q: 0.2559, e: 1.2011, i: 122.74, O: 24.60, w: 241.81, Tp: [2017, 9, 9], col: '#ffb38a', from: 'ЛИРЫ, ОТ ВЕГИ',
       facts: '1I/Оумуамуа · первый межзвёздный объект · открыт в 2017 году · около 100–400 м',
       note: 'Пролетел через Солнечную систему и уходит навсегда. Необычно вытянутый и без кометного хвоста.' },
-    { id: 'borisov', name: 'Комета Борисова', kind: 'interstellar', q: 2.006, e: 3.356, i: 44.05, O: 308.15, w: 209.12, Tp: [2019, 12, 8], col: '#bfe8ff',
+    { id: 'borisov', name: 'Комета Борисова', kind: 'interstellar', q: 2.006, e: 3.356, i: 44.05, O: 308.15, w: 209.12, Tp: [2019, 12, 8], col: '#bfe8ff', from: 'КАССИОПЕИ',
       facts: '2I/Борисов · первая межзвёздная комета · открыта в 2019 году', note: 'Открыл крымский астроном-любитель Геннадий Борисов на самодельном телескопе.' },
-    { id: 'atlas3i', name: '3I/ATLAS', kind: 'interstellar', q: 1.357, e: 6.14, i: 175.1, O: 322.2, w: 128.0, Tp: [2025, 10, 29], col: '#c8f0ff',
+    { id: 'atlas3i', name: '3I/ATLAS', kind: 'interstellar', q: 1.357, e: 6.14, i: 175.1, O: 322.2, w: 128.0, Tp: [2025, 10, 29], col: '#c8f0ff', from: 'СТРЕЛЬЦА',
       facts: 'Третий межзвёздный объект · открыт 1 июля 2025 года · скорость около 58 км/с вдали от Солнца',
       note: 'Комета из другой звёздной системы. В конце октября 2025 года прошла перигелий между орбитами Земли и Марса.' },
   ];
@@ -2010,6 +2139,10 @@
 
   SMALL.forEach((o, k) => {
     prepOrbit(o, k + 1);
+    if (o.kind === 'interstellar') {   // the asymptotes of the hyperbola, drawn out to the Oort cloud in the far view
+      const lim = Math.acos(-1 / o.e) * 0.999, dir = nu => { const v = orbitPoint(o, 1, nu), l = Math.hypot(...v); return v.map(x => x / l); };
+      o.far = { from: atAU(dir(-lim), 60000), to: atAU(dir(lim), 60000) };
+    }
     if (o.fitEarth) {   // pick the phase that brings it past Earth on the known date
       let best = 0, bd = Infinity;
       for (let j = 0; j < 1440; j++) {
