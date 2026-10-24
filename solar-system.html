@@ -196,7 +196,8 @@
       © NSF–DOE Vera C. Rubin Observatory/NOIRLab/SLAC/AURA. Лицензия <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, <a href="https://rubinobservatory.org/gallery/media-policy" target="_blank" rel="noopener">правила использования</a>. Снимки уменьшены и затемнены; обсерватория не связана с этим проектом.</p>
     <p><b>Данные.</b> Планеты движутся по круговым орбитам по средним долготам эпохи J2000. Карликовые планеты, астероиды и кометы — по своим орбитальным элементам; у тел без даты перигелия положение на орбите примерное. Спутники Земли и аппараты у Марса показаны на настоящих высотах, наклонах и периодах, но не в реальном времени.</p>
     <p><b>Масштаб.</b> Расстояния и размеры сжаты, чтобы вся система поместилась на экран.</p>
-    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Тихий океан и участки, которых нет на снимках, нарисованы. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
+    <p><b>Луна.</b> Восточные три четверти видимой стороны — «минеральная Луна» астрофотографа, используется с разрешения автора: цвета усилены, синие моря богаты титаном, рыжие — железом. Западный край дорисован по карте морей и кратеров в тех же тонах.</p>
+    <p><b>Земля.</b> Поверхность собрана из трёх снимков целого диска: «Голубой шарик» экипажа «Аполлона-17» (7 декабря 1972 года) и композиты Blue Marble 2002 года над Индийским и Атлантическим океанами (Центр космических полётов Годдарда, данные MODIS). NASA, общественное достояние. Восточная часть Тихого океана и Северная Америка — снимок с «Аполлона» в обработке Тоби Орда (tobyord.com/earth). Западная часть Тихого океана заполнена облаками и морем с соседнего снимка. Земля повёрнута по настоящему звёздному времени, поэтому день и ночь приходятся на те же места, что и сейчас.</p>
     <p><small>Поверхности остальных планет процедурные, нарисованы шейдером, а не взяты с фотографий.</small></p>
   </div>
 </section>
@@ -287,8 +288,8 @@
   // Rubin Observatory images (CC BY 4.0, credited on the page); procedural sky until they load
   const photos = { cluster: new Image(), spiral: new Image(), nebula: new Image(), field: new Image(), earth: new Image() };
   photos.earth.src = 'img/earth-apollo17.jpg';
-  const earthIndian = new Image(), earthAtlantic = new Image();
-  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg';
+  const earthIndian = new Image(), earthAtlantic = new Image(), earthPacific = new Image();
+  earthIndian.src = 'img/earth-bm-indian.jpg'; earthAtlantic.src = 'img/earth-bm-atlantic.jpg'; earthPacific.src = 'img/earth-apollo-pacific.jpg';
   photos.field.src = 'img/rubin-cosmos.jpg';
   photos.cluster.src = 'img/rubin-virgo-cluster.jpg';
   photos.spiral.src = 'img/rubin-virgo-spiral.jpg';
@@ -562,6 +563,139 @@
     const anti = (460.46 + 0.9856474 * d + 1.915 * Math.sin(Ms) + 0.02 * Math.sin(2 * Ms)) * DEG;
     return Math.cos(lat) * Math.cos(lon - anti) > Math.cos(0.98 * DEG);
   };
+
+  // ---------- the Moon's near side, procedural, in the enhanced "mineral" colours of modern amateur mosaics ----------
+  // Maria at their real selenographic positions (lat, lon east, radius in degrees): titanium-rich basalts blue,
+  // iron-rich ones rust brown; highlands pale; rayed craters Tycho, Copernicus, Kepler, Aristarchus, Proclus.
+  const MARIA = [
+    [20, -57, 17, -1], [5, -50, 14, -0.6], [32, -44, 12, -0.8], [-3, -40, 10, 0.2], [33, -16, 16, 0.5], [37, -25, 9, -0.4],
+    [28, 17.5, 9.5, 0.9], [8.5, 31, 10.5, -1], [17, 59, 6.5, 0.7], [-8, 51, 8, 0.6], [-15, 35, 4.8, -0.3], [-21, -17, 9, 0.4],
+    [-24, -39, 5.5, 0.5], [13, 4, 3.8, 0.4], [2, 1, 3, 0.3], [-10, -23, 5, -0.5], [7, -31, 6, -0.6], [1, 87, 4, 0.3], [13, 86, 4, 0.3],
+    [56, -30, 5, 0.6], [57, -10, 5, 0.6], [56, 10, 5, 0.6], [57, 30, 5, 0.6], [-5.2, -68.6, 2.5, -0.5], [51.6, -9.3, 1.6, -0.2],
+  ];
+  const RAYED = [[-43.3, -11.2, 1.4, 1, 1], [9.6, -20.1, 1.3, 0.7, 0.75], [8.1, -38, 0.6, 0.5, 0.55], [23.7, -47.4, 0.6, 0.35, 0.7], [16.1, 46.8, 0.4, 0.45, 0.45]];
+  const CRATERS = [[-58.4, -14.4, 3.8], [-9.2, -1.9, 2.5], [-11.4, 26.4, 1.6], [-8.9, 61, 2.2], [-11.3, 4.1, 2], [-17.8, -1.3, 1.5], [-21.9, 10.6, 2.3], [-30, -8, 2], [-50, 22, 2.5], [44, 32, 1.4], [9.6, -20.1, 1.3], [-43.3, -11.2, 1.4], [8.1, -38, 0.6]];
+  const moonCache = { img: null, key: '' };
+  let moonAlbedo = null;
+  // the near side's eastern three quarters from an amateur "mineral moon" mosaic (used with the author's permission);
+  // alpha marks where the photos cover it, the rest is the procedural map below, matched to the photo's tone
+  const moonPhoto = new Image(); moonPhoto.src = 'img/moon-mineral.webp';
+  const selV = (la, lo) => [Math.cos(la * DEG) * Math.sin(lo * DEG), Math.sin(la * DEG), Math.cos(la * DEG) * Math.cos(lo * DEG)];
+  // crater relief from 3D cell noise: one jittered crater per cell, a bowl and a raised rim; returns [height, albedo factor]
+  function craterField(x, y, z, F, seed) {
+    const X = x * F, Y = y * F, Z = z * F, xi = Math.floor(X), yi = Math.floor(Y), zi = Math.floor(Z);
+    let h = 0, a = 1;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const cx = xi + dx, cy = yi + dy, cz = zi + dz, r0 = hash(cx + seed, cy, cz);
+      if (r0 > 0.55) continue;   // not every cell has a crater
+      const px = cx + hash(cx, cy + seed, cz), py = cy + hash(cx, cy, cz + seed), pz = cz + hash(cx + seed, cy + seed, cz);
+      const rc = 0.12 + 0.5 * Math.pow(hash(cz, cx + seed, cy), 2.5);
+      const d = Math.hypot(X - px, Y - py, Z - pz) / rc;
+      if (d > 1.6) continue;
+      h += d < 1 ? -0.6 * (1 - d * d) : 0;
+      h += 0.35 * Math.exp(-(((d - 1) / 0.18) ** 2));
+      if (d < 1) a *= 0.94 + 0.06 * d;
+    }
+    return [h, a];
+  }
+  function moonAlbedoMap(n) {
+    const out = new Float32Array(n * n * 4);
+    const maria = MARIA.map(([la, lo, R0, t]) => ({ v: selV(la, lo), c: Math.cos(R0 * 1.15 * DEG), R: R0 * DEG, t }));
+    const rayed = RAYED.map(([la, lo, R0, len, br]) => ({ v: selV(la, lo), R: R0 * DEG, len, br, la, lo }));
+    const named = CRATERS.map(([la, lo, R0]) => ({ v: selV(la, lo), R: R0 * DEG }));
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const x = (i + 0.5) / n * 2 - 1, y = 1 - (j + 0.5) / n * 2, rr = x * x + y * y, k = (j * n + i) * 4;
+      if (rr > 1) continue;
+      const z = Math.sqrt(1 - rr);
+      // maria: one soft field from all basins, its edge warped so the shores look like coastlines, not circles
+      const wx = x + 0.05 * (fbm(x * 5, y * 5, z * 5, 3) - 0.5), wy = y + 0.05 * (fbm(x * 5 + 9, y * 5, z * 5, 3) - 0.5), wz = z;
+      let m = 0, tint = 0, tw = 0;
+      for (const q of maria) {
+        const d = Math.acos(clamp(wx * q.v[0] + wy * q.v[1] + wz * q.v[2], -1, 1)), f = clamp(1.45 - d / q.R, 0, 1);
+        if (f > 0) { m = Math.max(m, f); tint += q.t * f; tw += f; }
+      }
+      const mare = smooth(clamp((m - 0.3) / 0.25, 0, 1));
+      tint = tw ? tint / tw : 0;
+      tint = clamp(tint + 0.6 * (fbm(x * 3 + 4, y * 3, z * 3, 3) - 0.5), -1, 1);
+      // relief: three sizes of craters, far fewer on the young, smooth maria
+      let h = 0, af = 1;
+      for (const [F, w, sd] of [[5, 1, 11], [13, 0.6, 23], [34, 0.35, 37]]) {
+        const [ch, ca] = craterField(x, y, z, F, sd), kk = w * (1 - 0.75 * mare);
+        h += ch * kk; af *= 1 - (1 - ca) * kk;
+      }
+      for (const q of named) {
+        const d = Math.acos(clamp(x * q.v[0] + y * q.v[1] + z * q.v[2], -1, 1)) / q.R;
+        if (d < 1.6) { h += (d < 1 ? -1.2 * (1 - d * d) : 0) + 0.7 * Math.exp(-(((d - 1) / 0.15) ** 2)); if (d < 0.9) af *= 0.9; }
+      }
+      const hn = fbm(x * 8 + 3, y * 8, z * 8, 4), fine = fbm(x * 70, y * 70, z * 70, 2);
+      let c = [214, 206, 200].map((v, ci) => v * (0.82 + 0.3 * hn) + (ci === 0 ? 6 : 0) * hn);   // pale, faintly pink highlands
+      const blue = [52, 70, 98], rust = [108, 72, 56], grey = [78, 76, 80];
+      const mc = mix(grey, tint < 0 ? blue : rust, Math.abs(tint) * 0.55);
+      c = mix(c, mc.map(v => v * (0.8 + 0.4 * hn)), mare * 0.96);
+      // young craters: bright halos and long thin rays that run across the maria
+      for (const q of rayed) {
+        const dot = x * q.v[0] + y * q.v[1] + z * q.v[2], d = Math.acos(clamp(dot, -1, 1));
+        const ex = [q.v[2], 0, -q.v[0]], el = Math.hypot(...ex) || 1, e1 = ex.map(v => v / el);
+        const e2 = [q.v[1] * e1[2] - q.v[2] * e1[1], q.v[2] * e1[0] - q.v[0] * e1[2], q.v[0] * e1[1] - q.v[1] * e1[0]];
+        const ang = Math.atan2(x * e2[0] + y * e2[1] + z * e2[2], x * e1[0] + y * e1[1] + z * e1[2]);
+        const rays = Math.pow(vnoise(Math.cos(ang) * 22 + q.la, Math.sin(ang) * 22 + q.lo, d * 2), 10) * 14;
+        const fall = Math.exp(-d / (0.45 * q.len)) * smooth(clamp(d / (q.R * 2) - 0.5, 0, 1));
+        const halo = Math.exp(-((d / (q.R * 2.2)) ** 2));
+        const add = q.br * (60 * halo + 40 * rays * fall * (0.5 + fine));
+        c = c.map(v => Math.min(255, v + add));
+      }
+      const sm = (0.88 + 0.24 * fine) * af;
+      out[k] = c[0] * sm; out[k + 1] = c[1] * sm; out[k + 2] = c[2] * sm; out[k + 3] = h;
+    }
+    if (ready(moonPhoto)) try {
+      const cv = document.createElement('canvas'); cv.width = cv.height = n;
+      const g = cv.getContext('2d'); g.drawImage(moonPhoto, 0, 0, n, n);
+      const P = g.getImageData(0, 0, n, n).data, Lum = new Float32Array(n * n);
+      for (let q = 0; q < n * n; q++) Lum[q] = P[q * 4] + P[q * 4 + 1] + P[q * 4 + 2];
+      // tone of the procedural map matched to the photo where both exist
+      const sum = [0, 0, 0, 0, 0, 0];
+      for (let q = 0; q < n * n; q++) if (P[q * 4 + 3] > 230 && out[q * 4] > 0) for (let ch = 0; ch < 3; ch++) { sum[ch] += P[q * 4 + ch]; sum[ch + 3] += out[q * 4 + ch]; }
+      const gain = [0, 1, 2].map(ch => sum[ch + 3] ? sum[ch] / sum[ch + 3] : 1);
+      for (let j = 1; j < n - 1; j++) for (let i = 1; i < n - 1; i++) {
+        const q = j * n + i, k = q * 4, a = P[k + 3] / 255;
+        if (out[k] === 0 && out[k + 1] === 0) continue;   // outside the disc
+        // relief from the photo itself: its local brightness detail stands in for height
+        const hp = (Lum[q] * 4 - Lum[q - 1] - Lum[q + 1] - Lum[q - n] - Lum[q + n]) / 765;
+        for (let ch = 0; ch < 3; ch++) out[k + ch] = out[k + ch] * gain[ch] * (1 - a) + P[k + ch] * a;
+        out[k + 3] = out[k + 3] * (1 - a) + hp * 0.25 * a;
+      }
+      out.photo = true;
+    } catch (e) { /* tainted canvas (file://): keep the procedural Moon */ }
+    return out;
+  }
+  // the lit Moon disc for this light direction (screen x, y, toward-viewer z), cached while the light barely moves
+  function lunarDisc(lx, ly, lz, eclipse, px) {
+    const n = px > 140 ? (ULTRA ? 512 : 384) : 192;
+    const key = [n, Math.round(lx * 20), Math.round(ly * 20), Math.round(lz * 20), eclipse, ready(moonPhoto)].join();
+    if (moonCache.key === key) return moonCache.img;
+    if (!moonAlbedo || moonAlbedo.n !== n || (ready(moonPhoto) && !moonAlbedo.map.photo)) moonAlbedo = { n, map: moonAlbedoMap(n) };
+    const c = moonCache.img || document.createElement('canvas'); c.width = c.height = n;
+    const g = c.getContext('2d'), id = g.createImageData(n, n), d = id.data, A0 = moonAlbedo.map;
+    const ll = Math.hypot(lx, ly, lz) || 1, L = [lx / ll, ly / ll, lz / ll];
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const x = (i + 0.5) / n * 2 - 1, y = (j + 0.5) / n * 2 - 1, rr = x * x + y * y, k = (j * n + i) * 4;
+      if (rr > 1) { d[k + 3] = 0; continue; }
+      const z = Math.sqrt(1 - rr);
+      // relief: tilt the normal by the height map's slope, so craters cast light and shade near the terminator
+      const hx = (i + 1 < n ? A0[k + 7] : A0[k + 3]) - (i > 0 ? A0[k - 1] : A0[k + 3]), hy = (j + 1 < n ? A0[k + 4 * n + 3] : A0[k + 3]) - (j > 0 ? A0[k - 4 * n + 3] : A0[k + 3]);
+      const bs = n / 220, nx = x - hx * bs, ny = y - hy * bs, nl = Math.hypot(nx, ny, z);
+      const mu0 = (nx * L[0] + ny * L[1] + z * L[2]) / nl;
+      // Lommel-Seeliger: the full Moon looks evenly bright to the edge, not like a shaded ball
+      let lit = mu0 > 0 ? 2 * mu0 / (mu0 + z) : 0;
+      lit = lit * smooth(clamp((mu0 + 0.03) / 0.08, 0, 1)) + 0.025;                 // a soft terminator, a hint of earthshine
+      let r = A0[k] * lit, gg = A0[k + 1] * lit, bb = A0[k + 2] * lit;
+      if (eclipse) { const s = (r + gg + bb) / 3; r = s * 0.75; gg = s * 0.32; bb = s * 0.18; }   // copper in Earth's shadow
+      d[k] = r; d[k + 1] = gg; d[k + 2] = bb; d[k + 3] = 255 * smooth(clamp((1 - Math.sqrt(rr)) * n / 2, 0, 1));
+    }
+    g.putImageData(id, 0, 0);
+    moonCache.img = c; moonCache.key = key;
+    return c;
+  }
 
   function sphere(x, y, r, col, lx, ly) {
     const g = ctx.createRadialGradient(x + lx * r * 0.5, y + ly * r * 0.5, r * 0.08, x, y, r * 1.05);
@@ -1785,6 +1919,9 @@
     { im: photos.earth, n: 1024, cx: 512, cy: 512, r: 482.6, lat0: -30.14, lon0: 33.76, rho: 170.79, D: 18.87, east: 2 },
     { im: earthIndian, n: 672, cx: 336, cy: 336, r: 330, lat0: -9.95, lon0: 101.09, rho: 1.1, D: Infinity, east: 0.6 },
     { im: earthAtlantic, n: 672, cx: 336, cy: 336, r: 330, lat0: 37.78, lon0: -40.04, rho: -2.28, D: Infinity, east: 0.35 },
+    // the eastern Pacific and North America from an Apollo photograph (NASA; restored by Toby Ord, tobyord.com/earth),
+    // camera fitted to Florida, Cuba, Baja California, the Gulf of California, Texas and Yucatán (rms ≈ 2°)
+    { im: earthPacific, n: 1024, cx: 512.6, cy: 512.2, r: 510.9, lat0: 32.99, lon0: -111.13, rho: 20.92, D: 6.45, east: 0.6 },
   ];
   for (const q of EARTH_PHOTOS) {   // camera basis: centre c, image right a, image up b
     const p0 = q.lat0 * DEG, l0 = q.lon0 * DEG, ro = q.rho * DEG;
@@ -2547,10 +2684,12 @@
         ctx.stroke();
       }
     };
+    const Lz = Mc[6] * Lw[0] + Mc[8] * Lw[2];
     const moonPass = front => {
       for (const m of C.moons) {
         if ((m.sd >= 0) !== front) continue;
         const r = Math.max(1.6, m.size * R);
+        if (b.id === 'earth' && r > 6) { ctx.globalAlpha = A; ctx.drawImage(lunarDisc(Ls[0], Ls[1], Lz, m.eclipse, r * DPR * closeSc), m.sx * R - r, m.sy * R - r, 2 * r, 2 * r); ctx.globalAlpha = 1; continue; }
         ctx.globalAlpha = A * (m.eclipse ? 0.25 : 1);
         sphere(m.sx * R, m.sy * R, r, m.col, Ls[0], Ls[1]);
         ctx.globalAlpha = 1;
