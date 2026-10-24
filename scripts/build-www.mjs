@@ -29,7 +29,7 @@ ${page}
 </body></html>
 `;
 }
-const pages = { 'index.html': wrap('solar-system.html'), 'milky-way.html': wrap('milky-way.html') };
+const pages = { 'index.html': wrap('solar-system.html'), 'milky-way.html': wrap('milky-way.html').replace(/solar-system\.html/g, 'index.html') };   // in the bundle the solar system is index.html
 const html = pages['index.html'];
 
 // ---- fonts ----
