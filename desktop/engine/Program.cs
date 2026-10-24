@@ -255,7 +255,11 @@ sealed class Engine : ApplicationContext
     void CheckAttached()
     {
         if (rebuilding || windows.Count == 0) return;
-        if (windows.Any(w => !w.IsAttachedTo(layer)) || windows.Count != Screen.AllScreens.Length) _ = Rebuild();
+        if (windows.Any(w => !w.IsAttachedTo(layer) || w.ScreenChanged()) || windows.Count != Screen.AllScreens.Length) { _ = Rebuild(); return; }
+        // Explorer can move or resize the desktop layer after the display change we rebuilt on (a monitor added left of
+        // or above the main one moves its origin): put any window that no longer covers its monitor back in place
+        foreach (var w in windows)
+            if (!w.IsPlaced()) { Log.Write($"re-placing the window on {w.Screen.DeviceName} {w.Screen.Bounds}"); w.Attach(layer); }
     }
 
     void ApplyPause()

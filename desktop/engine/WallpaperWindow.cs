@@ -64,7 +64,7 @@ sealed class WallpaperWindow : Form
                 using var doc = System.Text.Json.JsonDocument.Parse(e.WebMessageAsJson);
                 if (doc.RootElement.TryGetProperty("type", out var t) && t.GetString() == "ready")
                 {
-                    Log.Write($"page ready on {Screen.DeviceName} {Screen.Bounds}: {e.WebMessageAsJson}");
+                    Log.Write($"page ready on {Screen.DeviceName} {Screen.Bounds} at {ScalePercent()} %: {e.WebMessageAsJson}");   // size × dpr in the message should match
                     ready = true; sentPause = null;
                     if (doc.RootElement.TryGetProperty("gpu", out var g) && g.ValueKind == System.Text.Json.JsonValueKind.String) Gpu = g.GetString() ?? "";
                     PageReady?.Invoke(this);
@@ -102,7 +102,31 @@ sealed class WallpaperWindow : Form
             SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW | (after == IntPtr.Zero ? SWP_NOZORDER : 0));
     }
 
+    // the monitor's own Windows scaling (125, 150, …), for the log: on mixed-DPI setups the page's devicePixelRatio should match it
+    int ScalePercent()
+    {
+        var b = Screen.Bounds;
+        var r = new RECT { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
+        try { return GetDpiForMonitor(MonitorFromRect(ref r, MONITOR_DEFAULTTONEAREST), 0, out var dx, out _) == 0 ? (int)Math.Round(dx * 100 / 96.0) : 0; }
+        catch { return 0; }
+    }
+
     public bool IsAttachedTo(IntPtr layer) => IsHandleCreated && GetParent(Handle) == layer && IsWindow(layer);
+
+    // the monitor this window was made for is gone, or has moved or changed resolution
+    public bool ScreenChanged()
+    {
+        var now = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(s => s.DeviceName == Screen.DeviceName);
+        return now == null || now.Bounds != Screen.Bounds;
+    }
+
+    // does the window still cover exactly its monitor (screen coordinates, physical pixels; can be negative)?
+    public bool IsPlaced()
+    {
+        if (!IsHandleCreated || !GetWindowRect(Handle, out var r)) return true;
+        var b = Screen.Bounds;
+        return r.Left == b.Left && r.Top == b.Top && r.Right == b.Right && r.Bottom == b.Bottom;
+    }
 
     public void Post(string json)
     {

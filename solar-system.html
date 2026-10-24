@@ -125,6 +125,9 @@
     .wall-msg b { font-size: 18px; }
     .wall-msg p { font-size: 14px; }
   }
+  /* 1440-px-tall screens (27″ 1440p, 4K at 150 %, 21:9, 32:9) and 4K at 100 %: the same panel would be physically smaller than on 1080p */
+  @media (min-width: 1200px) and (min-height: 1400px) { .wall-panel { zoom: 1.15; } }
+  @media (min-width: 1200px) and (min-height: 1900px) { .wall-panel { zoom: 1.45; } }
   @keyframes wall-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .wall-msg { animation: none; } }
 </style>
@@ -259,10 +262,18 @@
   const MET_TEST = /[#&]meteors=test\b/.test(location.hash);
   let showUfo = FX_ON && !/[#&]ufo=0\b/.test(location.hash), ufo = null;
   let showMeteors = FX_ON && !/[#&]meteors=0\b/.test(location.hash);
+  // render scale: the screen's own pixels (×1.5 for ULTRA), but at most RENDER_PX pixels a frame and 8192 px a side (the smallest
+  // WebGL texture/viewport limit): 4K, 5K and 32:9 stay native, 6K/8K at 200 % render a little under native instead of a ~1 GB canvas set
+  const RENDER_PX = ULTRA ? 25e6 : 16.6e6, RENDER_SIDE = 8192;
+  // width the wallpaper's clock/feed panel takes on the right (0 when hidden), so close-ups stay clear of it
+  let wallW = 0;
+  const measureWall = () => { const el = document.getElementById('wall'); wallW = el && !el.hidden ? el.getBoundingClientRect().width : 0; };
   function resize() {
-    DPR = ULTRA ? Math.min((devicePixelRatio || 1) * 1.5, 3) : Math.min(devicePixelRatio || 1, 2);
+    measureWall();
     W = cv.clientWidth; H = cv.clientHeight;
-    cv.width = W * DPR; cv.height = H * DPR;
+    DPR = ULTRA ? Math.min((devicePixelRatio || 1) * 1.5, 3) : Math.min(devicePixelRatio || 1, 2);
+    DPR = Math.min(DPR, Math.sqrt(RENDER_PX / Math.max(1, W * H)), RENDER_SIDE / Math.max(1, W), RENDER_SIDE / Math.max(1, H));
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     small = Math.min(W, H) < 600;
     const z = Math.min(W, H * 1.4) / 2 / 7.1;
     zoom = zoom0 ? zoom * z / zoom0 : z;
@@ -306,7 +317,7 @@
   }
   // draws a photo to cover the screen around a focus point, darkened most where the planets sit
   function photoSky(c, im, fxp, fyp, dim, hole) {
-    c.width = W * DPR; c.height = H * DPR;
+    c.width = cv.width; c.height = cv.height;
     const g = c.getContext('2d');
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     const k = Math.max(W / im.naturalWidth, H / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
@@ -325,7 +336,7 @@
   function resetStars() {
     stars.length = 0;
     for (let i = 0; i < W * H / 3500; i++) stars.push({ x: Math.random(), y: Math.random(), s: Math.random() < 0.15 ? 1.4 : 0.8, tw: rnd(0, TAU), sp: rnd(0.4, 1.5) });
-    bgCanvas.width = W * DPR; bgCanvas.height = H * DPR;
+    bgCanvas.width = cv.width; bgCanvas.height = cv.height;
     const g = bgCanvas.getContext('2d');
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.fillStyle = '#020309'; g.fillRect(0, 0, W, H);
@@ -752,7 +763,7 @@
   const FAR = {
     id: 'far', name: 'За пределами Солнечной системы', isFar: true,
     facts: 'Гелиопауза ≈ 120 а. е. · облако Оорта ≈ 2 000–100 000 а. е. · Проксима Центавра 4,24 св. года · масштаб логарифмический',
-    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м; пунктиры — пути пяти зондов, улетающих к звёздам. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — сквозь него прошли межзвёздные гости Оумуамуа, Борисов и 3I/ATLAS. Солнце летит сквозь Местное межзвёздное облако к Геркулесу, внутри Местного пузыря горячего газа, и вместе с Галактикой обходит её центр. Нажми на звезду, чтобы подлететь к её планетной системе.',
+    note: 'Солнечный ветер выдувает в межзвёздном газе пузырь — гелиосферу. «Вояджер-1» вышел из неё в 2012 году, «Вояджер-2» в 2018-м; пунктиры — пути пяти зондов, улетающих к звёздам. Дальше лежит облако Оорта — триллионы ледяных ядер комет, — сквозь него прошли межзвёздные гости Оумуамуа, Борисов и 3I/ATLAS. Зелёная сеть — радиоэхо Земли: наши передачи успели улететь примерно на 100 световых лет; стрелки — послания к звёздам. Дальше — Гиады, Плеяды, Бетельгейзе, туманность Ориона на газовой волне Рэдклиффа и ближайшие чёрные дыры. Солнце летит сквозь Местное межзвёздное облако к Геркулесу, внутри Местного пузыря горячего газа, и вместе с Галактикой обходит её центр. Нажми на звезду, чтобы подлететь к её планетной системе.',
   };
   const heliRadius = cosTheta => 120 * Math.pow(1 + 1.1 * (1 - cosTheta), 1.5);   // nose 120 AU, flanks ~180, tail ~400+
   const helio = [], oort = [];
@@ -892,6 +903,45 @@
     }
   }
 
+  // farther out, on the same star scale: clusters, nebulae, bright stars, the nearest black holes (from memory; check before citing)
+  const DEEP = [
+    { name: 'Арктур', ra: 14.261, dec: 19.18, ly: 36.7, type: 'star', col: '#ffc68a', r: 4, note: 'ОРАНЖЕВЫЙ ГИГАНТ' },
+    { name: 'Гиады', ra: 4.45, dec: 15.87, ly: 153, type: 'cluster', col: '#ffe2b8', r: 9, note: 'БЛИЖАЙШЕЕ СКОПЛЕНИЕ' },
+    { name: 'Канопус', ra: 6.399, dec: -52.70, ly: 310, type: 'star', col: '#f4f2ff', r: 4.6, note: 'ВТОРАЯ ПО ЯРКОСТИ ЗВЕЗДА' },
+    { name: 'Полярная', ra: 2.53, dec: 89.26, ly: 433, type: 'star', col: '#fff4d8', r: 4, note: 'НАД СЕВЕРНЫМ ПОЛЮСОМ' },
+    { name: 'Плеяды', ra: 3.79, dec: 24.12, ly: 444, type: 'cluster', col: '#b8ccff', r: 8, note: 'СЕМЬ СЕСТЁР · 100 МЛН ЛЕТ' },
+    { name: 'Бетельгейзе', ra: 5.919, dec: 7.41, ly: 550, type: 'star', col: '#ff8a50', r: 7, note: 'КРАСНЫЙ СВЕРХГИГАНТ · ВЗОРВЁТСЯ СВЕРХНОВОЙ' },
+    { name: 'Ригель', ra: 5.242, dec: -8.20, ly: 860, type: 'star', col: '#cfe0ff', r: 6, note: 'ГОЛУБОЙ СВЕРХГИГАНТ' },
+    { name: 'Туманность Ориона', ra: 5.588, dec: -5.39, ly: 1344, type: 'nebula', col: '255,120,160', r: 14, note: 'ЗДЕСЬ РОЖДАЮТСЯ ЗВЁЗДЫ' },
+    { name: 'Gaia BH1', ra: 17.475, dec: -0.58, ly: 1560, type: 'bh', col: '#ffd59a', r: 3, note: 'БЛИЖАЙШАЯ ЧЁРНАЯ ДЫРА · 10 СОЛНЦ' },
+    { name: 'Gaia BH3', ra: 19.65, dec: 14.93, ly: 1926, type: 'bh', col: '#ffe6b8', r: 3.4, note: 'ЧЁРНАЯ ДЫРА · 33 СОЛНЦА' },
+  ].map(o => ({ ...o, wpos: raDec(o.ra, o.dec).map(v => v * (18 + 5 * Math.log(o.ly / 4))),
+    pts: o.type === 'cluster' ? Array.from({ length: 40 }, () => [gauss() * o.r * 0.9, gauss() * o.r * 0.9, Math.random() < 0.2 ? 1.8 : 1, rnd(0.4, 1)]) : null }));
+  const starScale = ly => 18 + 5 * Math.log(ly / 4);
+  const skyAt = (raH, decD, ly) => raDec(raH, decD).map(v => v * starScale(ly));
+  // the Radcliffe Wave: a 9 000-light-year ripple of gas clouds through Orion, Taurus, Perseus, Cepheus and Cygnus
+  const WAVE = [[5.6, -5, 1350], [4.5, 25, 450], [3.5, 32, 1000], [22.5, 65, 1200], [20.6, 41, 4500]].map(([ra, dec, ly]) => skyAt(ra, dec, ly));
+  const wave = [];
+  for (let i = 0; i < (small ? 260 : 420); i++) {
+    const u = Math.random() * (WAVE.length - 1), k = Math.floor(u), f = u - k, a = WAVE[k], b = WAVE[k + 1];
+    const up = Math.sin(u * Math.PI * 1.3) * 2.5;   // the wave rises and falls through the galactic plane
+    wave.push({ p: [0, 1, 2].map(j => a[j] + (b[j] - a[j]) * f + gauss() * 1.1 + (j === 1 ? up : 0)), r: rnd(0.8, 2), o: rnd(0.03, 0.08) });
+  }
+  // human traces: our radio echo, messages sent to the stars, the Wow! signal
+  const RADIO_LY = 100, YR = 2000 + (Date.now() - Date.UTC(2000, 0, 1)) / 3.15576e10;
+  const radio = [];   // a net of latitude and longitude lines
+  for (let la = -75; la <= 75; la += 15) { const l = []; for (let lo = 0; lo <= 360; lo += 6) l.push(eclDir(lo, la).map(v => v * starScale(RADIO_LY))); radio.push(l); }
+  for (let lo = 0; lo < 360; lo += 30) { const l = []; for (let la = -90; la <= 90; la += 6) l.push(eclDir(lo, la).map(v => v * starScale(RADIO_LY))); radio.push(l); }
+  const MESSAGES = [
+    { name: 'ПОСЛАНИЕ АРЕСИБО (1974) К СКОПЛЕНИЮ M13', ra: 16.695, dec: 36.46, sent: 1974.87, to: 22200 },
+    { name: '«ПОСЛАНИЕ С ЗЕМЛИ» (2008) К ГЛИЗЕ 581', ra: 15.322, dec: -7.72, sent: 2008.78, to: 20.4 },
+  ];
+  const WOW = { ra: 19.43, dec: -26.95 };
+  const ringPts = ly => Array.from({ length: 145 }, (_, i) => eclDir(i * 2.5, 0).map(v => v * starScale(ly)));
+  const RINGS = [5, 10, 20, 50].map(ly => ({ ly, pts: ringPts(ly) }));
+  // now and then a comet breaks loose from the Oort cloud and falls toward the Sun
+  let oortComet = null, oortNext = 8;
+
   const STAR_SYSTEMS = [
     { id: 'alphacen', name: 'Альфа Центавра', ra: 14.66, dec: -60.83, ly: 4.37, col: '#fff1d0', r: 3.8, comp: [{ col: '#ffd59a', sep: 9 }, { col: '#ff8a5c', sep: 26, small: true }],
       planets: [{ name: 'Проксима b', P: 11.19 }, { name: 'Проксима d', P: 5.12 }],
@@ -960,9 +1010,7 @@
     for (const q of lic) {
       const [x, y, , k] = project(...q.p), r = q.r * zoom * k;
       if (x < -r || y < -r || x > W + r || y > H + r || r < 2) continue;
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, `rgba(${q.col},${(q.o * fk).toFixed(3)})`); g.addColorStop(1, `rgba(${q.col},0)`);
-      ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      blob(x, y, r, q.col, q.o * fk);
     }
     for (const list of [milky, bubble, helio, oort]) for (const q of list) {
       const [x, y] = project(...q.p);
@@ -970,6 +1018,7 @@
       ctx.globalAlpha = q.o * fk; ctx.fillStyle = q.c; const sz = q.s || 1.1; ctx.fillRect(x, y, sz, sz);
     }
     drawFarPaths(fk);
+    drawDeepSky(fk);
     const glow = (x, y, r, col, a) => {
       const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
       g.addColorStop(0, col); g.addColorStop(0.25, col + '88'); g.addColorStop(1, col + '00');
@@ -1028,11 +1077,31 @@
     at(GROT.map(v => v * 40), 'ОРБИТА ВОКРУГ ЦЕНТРА · 230 КМ/С · ОБОРОТ ЗА 230 МЛН ЛЕТ', 'rgba(255,225,180,0.8)');
     at(APEX.map(v => v * 11), 'СОЛНЦЕ ЛЕТИТ К ГЕРКУЛЕСУ · 20 КМ/С', 'rgba(255,214,140,0.9)');
     at(NOSE.map(v => v * 12.5), 'МЕЖЗВЁЗДНЫЙ ВЕТЕР · 26 КМ/С', 'rgba(170,215,255,0.8)');
-    for (const pr of PROBES) at(probeAt(pr), `${pr.name.toUpperCase()} · ${Math.round(probeAU(pr))} А. Е.`, 'rgba(160,235,255,0.9)');
+    for (const pr of PROBES) at(probeAt(pr), `${pr.name.toUpperCase()} · ${Math.round(probeAU(pr))} А. Е.${pr.name.startsWith('Вояджер') ? ' · ЗОЛОТАЯ ПЛАСТИНКА' : pr.name.startsWith('Пионер') ? ' · ПЛАСТИНКА С ПОСЛАНИЕМ' : ''}`, 'rgba(160,235,255,0.9)');
     for (const o of SMALL) if (o.kind === 'interstellar' && o.far) at(o.far.from, `${o.name.toUpperCase()} · ПРИЛЕТЕЛ ИЗ: ${o.from}`, 'rgba(255,200,170,0.8)');
     for (const st of STAR_SYSTEMS) if (st.flyby) at(atAU(raDec(st.ra, st.dec), st.flyby), 'ЗДЕСЬ ПРОШЛА 70 ТЫС. ЛЕТ НАЗАД', 'rgba(255,160,130,0.8)');
+    for (const o of DEEP) at(o.wpos, `${o.name.toUpperCase()} · ${o.ly.toLocaleString('ru-RU')} СВ. ЛЕТ · ${o.note}`, o.type === 'bh' ? 'rgba(255,200,140,0.9)' : 'rgba(255,230,200,0.85)', o.r + 6);
+    at(WAVE[3], 'ВОЛНА РЭДКЛИФФА · ГАЗОВАЯ ВОЛНА ДЛИНОЙ 9 000 СВ. ЛЕТ', 'rgba(255,150,180,0.8)');
+    at(eclDir(200, 30).map(v => v * starScale(RADIO_LY)), `РАДИОЭХО ЗЕМЛИ · ≈${RADIO_LY} СВ. ЛЕТ · НАШИ ПЕРЕДАЧИ С 1920-Х`, 'rgba(140,255,190,0.8)');
+    for (const m of MESSAGES) { const d = Math.min(m.to, YR - m.sent);
+      at(skyAt(m.ra, m.dec, Math.max(4, d)), `${m.name} · ПРОЛЕТЕЛО ${d.toFixed(0)} ИЗ ${m.to.toLocaleString('ru-RU')} СВ. ЛЕТ`, 'rgba(140,255,190,0.85)'); }
+    at(skyAt(WOW.ra, WOW.dec, 300), 'СИГНАЛ «WOW!» · 1977 · ПРИШЁЛ ОТСЮДА И БОЛЬШЕ НЕ ПОВТОРИЛСЯ', 'rgba(255,240,150,0.85)');
+    for (const r of RINGS) at(r.pts[16], `${r.ly} СВ. ЛЕТ`, 'rgba(180,200,240,0.6)', 3);
+    if (oortComet && oortComet.label) { const [x, y] = project(...oortComet.p); label('КОМЕТА ИЗ ОБЛАКА ООРТА', x + 8, y + 10, 'rgba(200,240,255,0.85)'); }
   }
   // probe trails, interstellar visitors' paths, the Sun's motion, Scholz's star's flyby
+  // soft gas blobs: one cached gradient sprite per colour, drawn with drawImage (gradients per blob per frame are slow)
+  const blobCache = new Map();
+  const blob = (x, y, r, rgb, a) => {
+    let c = blobCache.get(rgb);
+    if (!c) {
+      c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(0.5, `rgba(${rgb},0.35)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64); blobCache.set(rgb, c);
+    }
+    ctx.globalAlpha = a; ctx.drawImage(c, x - r, y - r, 2 * r, 2 * r);
+  };
   const arrow = (a, b, col, alpha, w = 1.2) => {
     const [x0, y0] = project(...a), [x1, y1] = project(...b), ang = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0);
     if (L < 8) return;
@@ -1042,6 +1111,92 @@
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - 0.4), y1 - h * Math.sin(ang - 0.4)); ctx.lineTo(x1 - h * Math.cos(ang + 0.4), y1 - h * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
     ctx.lineWidth = 1;
   };
+  function drawDeepSky(fk) {
+    // distance rings in the plane of the planets
+    ctx.strokeStyle = '#9fb4e0'; ctx.setLineDash([2, 5]);
+    for (const r of RINGS) {
+      ctx.globalAlpha = 0.16 * fk; ctx.beginPath();
+      r.pts.forEach((q, i) => { const [x, y] = project(...q); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalCompositeOperation = 'lighter';
+    // our radio echo: a faint green net of latitude and longitude lines, 100 light years out
+    ctx.strokeStyle = '#8cffbe'; ctx.globalAlpha = 0.07 * fk; ctx.beginPath();
+    for (const l of radio) l.forEach((q, i) => { const [x, y] = project(...q); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    // the Radcliffe Wave and the Orion Nebula: soft pink gas
+    for (const q of wave) {
+      const [x, y, , k] = project(...q.p), r = q.r * zoom * k;
+      if (r < 1.5 || x < -r || y < -r || x > W + r || y > H + r) continue;
+      blob(x, y, r, '255,120,160', q.o * fk);
+    }
+    const mk = Math.min(3, Math.max(1, Math.sqrt(zoom / (zoom0 * 0.2))));
+    for (const o of DEEP) {
+      const [x, y] = project(...o.wpos);
+      if (x < -60 || y < -60 || x > W + 60 || y > H + 60) continue;
+      const r = o.r * Math.sqrt(mk);
+      if (o.type === 'cluster') {
+        ctx.fillStyle = o.col;
+        for (const [dx, dy, sz, a] of o.pts) { ctx.globalAlpha = a * fk; ctx.beginPath(); ctx.arc(x + dx * mk, y + dy * mk, sz * 1.2, 0, TAU); ctx.fill(); }
+        if (o.name === 'Плеяды') {   // blue reflection nebula
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.2); g.addColorStop(0, 'rgba(140,170,255,0.25)'); g.addColorStop(1, 'rgba(140,170,255,0)');
+          ctx.globalAlpha = fk; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, TAU); ctx.fill();
+        }
+      } else if (o.type === 'nebula') {
+        for (const [f, c] of [[1, o.col], [0.5, '255,200,170'], [0.22, '255,255,240']]) {
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2 * f); g.addColorStop(0, `rgba(${c},0.5)`); g.addColorStop(1, `rgba(${c},0)`);
+          ctx.globalAlpha = fk; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r * 2 * f, r * 1.4 * f, 0.6, 0, TAU); ctx.fill();
+        }
+      } else if (o.type === 'bh') {   // a companion star circling a dark disc with a thin bright ring of bent light
+        const ph = performance.now() / 4000;
+        ctx.globalAlpha = 0.9 * fk; ctx.strokeStyle = '#ffc890'; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.ellipse(x, y, r * 1.6, r * 0.6, -0.3, 0, TAU); ctx.stroke(); ctx.lineWidth = 1;
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = fk; ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'lighter';
+        const cx = x + Math.cos(ph) * r * 4, cy = y + Math.sin(ph) * r * 1.6;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 6); g.addColorStop(0, o.col); g.addColorStop(1, o.col + '00');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, TAU); ctx.fill();
+      } else {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4); g.addColorStop(0, o.col); g.addColorStop(0.25, o.col + '88'); g.addColorStop(1, o.col + '00');
+        ctx.globalAlpha = fk; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // messages to the stars: a green arrow as far as the signal has travelled; the Wow! signal coming in
+    for (const m of MESSAGES) {
+      const d = Math.min(m.to, YR - m.sent);
+      arrow(skyAt(m.ra, m.dec, 4.2), skyAt(m.ra, m.dec, Math.max(4.5, d)), 'rgba(140,255,190,0.9)', 0.7 * fk);
+      if (m.to > d) { const [x0, y0] = project(...skyAt(m.ra, m.dec, d)), [x1, y1] = project(...skyAt(m.ra, m.dec, m.to));
+        ctx.globalAlpha = 0.2 * fk; ctx.strokeStyle = '#8cffbe'; ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]); }
+    }
+    arrow(skyAt(WOW.ra, WOW.dec, 300), skyAt(WOW.ra, WOW.dec, 4.5), 'rgba(255,240,150,0.9)', 0.45 * fk);
+    // a comet falling from the Oort cloud: a curving path, a tail growing away from the Sun as it warms up
+    oortNext -= frameDt;
+    if (!oortComet && oortNext <= 0) {
+      const u = rnd(-1, 1), ph = rnd(0, TAU), q = Math.sqrt(1 - u * u), side = [-Math.sin(ph), 0, Math.cos(ph)];
+      oortComet = { dir: [q * Math.cos(ph), u, q * Math.sin(ph)], side, bend: rnd(0.3, 0.7) * (Math.random() < 0.5 ? -1 : 1), t: 0, dur: rnd(14, 22), label: Math.random() < 0.6, p: [0, 0, 0] };
+      oortNext = rnd(25, 60);
+    }
+    if (oortComet) {
+      const c = oortComet; c.t += frameDt;
+      const u = Math.min(1, c.t / c.dur), au = 40000 * Math.pow(1 - u, 2.2) + 0.8;   // speeds up as it falls
+      const ang = c.bend * (1 - u);
+      const v = c.dir.map((x, i) => x * Math.cos(ang) + c.side[i] * Math.sin(ang));
+      c.p = atAU(v, au);
+      const [x, y] = project(...c.p), [sx, sy] = project(0, 0, 0);
+      const warm = clamp((200 - au) / 190, 0, 1), L = Math.hypot(x - sx, y - sy) || 1;
+      const a = Math.min(1, c.t / 2) * (u > 0.94 ? (1 - u) / 0.06 : 1) * fk;
+      ctx.globalCompositeOperation = 'lighter';
+      if (warm > 0) {
+        const tx = x + (x - sx) / L * 40 * warm, ty = y + (y - sy) / L * 40 * warm;
+        const g = ctx.createLinearGradient(x, y, tx, ty); g.addColorStop(0, `rgba(180,230,255,${(0.7 * a).toFixed(3)})`); g.addColorStop(1, 'rgba(180,230,255,0)');
+        ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(tx, ty); ctx.stroke(); ctx.lineWidth = 1;
+      }
+      ctx.globalAlpha = a; ctx.fillStyle = '#e8f6ff'; ctx.beginPath(); ctx.arc(x, y, 1.6 + warm, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+      if (u >= 1) oortComet = null;
+    }
+  }
   function drawFarPaths(fk) {
     ctx.globalCompositeOperation = 'lighter';
     // deep-space probes: a fading trail from the planets out to where each one is today
@@ -1729,9 +1884,11 @@
     };
   }
   const texQueue = [];
+  // close-up maps: 2K on ULTRA and wherever the close-up disc is ~1500+ device px across (4K-class screens), else 1K
+  const hiTexW = () => small ? 512 : ULTRA || Math.min(W, H) * DPR >= 1800 ? 2048 : 1024;
   function bodyTextures(b, hi) {
     if (hi && b.texHi) return b.texHi;
-    if (hi && !b.texJob) { b.texJob = textureJob(b, small ? 512 : ULTRA ? 2048 : 1024); texQueue.push(b); }
+    if (hi && !b.texJob) { b.texJob = textureJob(b, hiTexW()); texQueue.push(b); }
     if (hi) { const i = texQueue.indexOf(b); if (i > 0) { texQueue.splice(i, 1); texQueue.unshift(b); } }
     if (!b.texLo) { const j = textureJob(b, 128); let r; while (!(r = j.step(Infinity))); b.texLo = r; }
     return b.texLo;
@@ -2546,6 +2703,12 @@
   addChip(SUN, 'Солнце', 'radial-gradient(circle at 35% 35%,#fffbe8,#ffb347 55%,#e0601a)');
   PLANETS.forEach(p => addChip(p, p.name, `radial-gradient(circle at 35% 35%,${p.col[0]},${p.col[1]} 55%,${p.col[2]})`));
   addChip(FAR, 'За пределами', 'radial-gradient(circle,#c8f0ff,#7f9cff 55%,rgba(60,80,160,0))');
+  {   // the next rungs of the scale ladder live on the Milky Way page
+    const a = document.createElement('button'); a.id = 'b-galaxy';
+    const d = document.createElement('span'); d.className = 'dot'; d.style.background = 'radial-gradient(circle,#fff1dc,#ffcf90 40%,rgba(120,90,160,0))'; a.append(d, 'Млечный Путь →');
+    a.addEventListener('click', () => { location.href = 'milky-way.html'; });
+    bodiesRow.append(a);
+  }
 
   let speedBeforeClose = null;
   const speedBtns = [...document.querySelectorAll('[data-speed]')];
@@ -2713,12 +2876,12 @@
   // high-resolution maps are built in the background, most-visited bodies first
   if (GLR) ['earth', 'saturn', 'jupiter', 'mars', 'sun', 'venus', 'uranus', 'neptune', 'mercury'].forEach(id => {
     const b = BODIES.find(o => o.id === id);
-    b.texJob = textureJob(b, small ? 512 : ULTRA ? 2048 : 1024); texQueue.push(b);
+    b.texJob = textureJob(b, hiTexW()); texQueue.push(b);
   });
 
   // ---------- wallpaper mode (#wallpaper): our StarsDesktop engine, or Lively Wallpaper with the Stars helper ----------
   const WALL = /^#wallpaper\b/.test(location.hash) || /[?&]wallpaper\b/.test(location.search);
-  let wallPaused = false, wallFrameMs = 32;
+  let wallPaused = false, wallFrameMs = 1000 / 30;   // StarsDesktop's fps cap (30 or 60)
   if (WALL) {
     document.body.classList.add('wall');
     const wall = document.getElementById('wall'); wall.hidden = false;
@@ -2784,7 +2947,7 @@
         const m = e.data || {};
         if (m.type === 'feed') { feed = m; $('w-note').hidden = true; renderWall(); }
         else if (m.type === 'pause') wallPaused = !!m.on;
-        else if (m.type === 'config') { if (m.fps > 0) wallFrameMs = 1000 / m.fps - 1; applyWall(m); }
+        else if (m.type === 'config') { if (m.fps > 0) wallFrameMs = 1000 / m.fps; applyWall(m); }
       });
       let gpu = '';
       try { const x = gl && gl.getExtension('WEBGL_debug_renderer_info'); gpu = x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : ''; } catch (e) {}
@@ -2817,6 +2980,7 @@
         choose(wallView === 'tour' ? null : target(wallView));
       }
       if (o.panel !== undefined) wall.hidden = o.panel === false || o.panel === '0' || o.panel === 'false';
+      measureWall();
       const off = v => v === false || v === 0 || v === '0' || v === 'false';
       if (o.ufo !== undefined) { showUfo = FX_ON && !off(o.ufo); if (!showUfo) ufo = null; }
       if (o.meteors !== undefined) showMeteors = FX_ON && !off(o.meteors);
@@ -3311,8 +3475,10 @@
   let lastDraw = 0;
   function frame(now) {
     // on the desktop: ~30 fps, and nothing at all while a fullscreen app covers the wallpaper
-    if (WALL && (wallPaused || now - lastDraw < wallFrameMs)) { if (wallPaused) last = now; requestAnimationFrame(frame); return; }
-    lastDraw = now;
+    // the cap keeps its own clock (a step of exactly 1000/fps, 2 ms early allowed), so on 120/144/165/240 Hz screens 60 stays 60
+    // and 30 stays 30 instead of rounding down to the next whole number of refreshes (60 → 48 fps on 144 Hz)
+    if (WALL && (wallPaused || now - lastDraw < wallFrameMs - 2)) { if (wallPaused) last = now; requestAnimationFrame(frame); return; }
+    lastDraw = now - lastDraw > 2 * wallFrameMs ? now : lastDraw + wallFrameMs;
     // rAF timestamps can predate the start time (e.g. a page opened in the background): never step time backwards
     const dt = clamp((now - last) / 1000, 0, 0.05); last = Math.max(last, now); t += dt; frameDt = dt;
     const dDays = speed * dt;
@@ -3355,11 +3521,15 @@
       if (showMeteors) drawSkyMeteors(e);
       if (showConst) drawConstellations(closeCam(), e);
       closeR = Math.min(Math.min(W, H) * 0.5 / sel.close.fit, Math.min(W, H) * (sel.isSun ? 0.3 : 0.34));
+      // wallpaper side panel: keep the disc (and rings) left of it, moving it off centre only as far as needed (16:10 laptops, portrait)
+      const ek = sel.rings ? sel.close.fit : 1.15, free = W - wallW;
+      if (wallW) closeR = Math.min(closeR, (free / 2 - 16) / ek);
+      const cxT = wallW ? Math.max(free / 2, Math.min(W / 2, free - 16 - closeR * ek)) : W / 2;
       // the close-up grows out of the body's spot in the overview
       const s0 = clamp((sel.sr || 4) / closeR, 0.01, 1);
       const sc = lerp(s0, 1, e);
       closeSc = sc;
-      const cxp = lerp(sel.sx, W / 2, e), cyp = lerp(sel.sy, H * 0.52, e);
+      const cxp = lerp(sel.sx, cxT, e), cyp = lerp(sel.sy, H * 0.52, e);
       closeCx = cxp; closeCy = cyp;
       ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * cxp, DPR * cyp);
       drawClose(sel, e, dDays, t);
