@@ -1,0 +1,83 @@
+# Runs tools/nasa_images in GitHub Actions (the dev container cannot reach NASA's servers).
+#   search:   prints the top results for each query (one query per line) to the log
+#   download: fetches the given NASA IDs and commits them to the nasa-assets branch (nasa/<id>.jpg)
+name: NASA images
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: search or download
+        required: true
+        default: search
+      queries:
+        description: "search: queries separated by ';'; download: NASA IDs separated by ';'"
+        required: true
+      size:
+        description: image size for download (orig, large, medium)
+        default: large
+      limit:
+        description: results per query
+        default: '15'
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r tools/nasa_images/requirements.txt pillow
+
+      - name: Search
+        if: inputs.mode == 'search'
+        env:
+          QUERIES: ${{ inputs.queries }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          cd tools/nasa_images
+          python - <<'PY'
+          import os
+          from nasa_images import search, files
+          for q in [x.strip() for x in os.environ['QUERIES'].split(';') if x.strip()]:
+              print(f'=== {q}')
+              for r in search(q, limit=int(os.environ['LIMIT'])):
+                  print(f"{r['date']} | {r['nasa_id']} | {r['center']} | {r['title'][:90]} | {r['description'][:160].replace(chr(10), ' ')}")
+          PY
+
+      - name: Download to the nasa-assets branch
+        if: inputs.mode == 'download'
+        env:
+          IDS: ${{ inputs.queries }}
+          SIZE: ${{ inputs.size }}
+        run: |
+          git fetch origin nasa-assets && git checkout nasa-assets || git checkout --orphan nasa-assets
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name nasa ! -name tools -exec rm -rf {} +
+          mkdir -p nasa
+          cd tools/nasa_images
+          python - <<'PY'
+          import os, json
+          from PIL import Image
+          from nasa_images import best_image, download, metadata
+          Image.MAX_IMAGE_PIXELS = None
+          for nid in [x.strip() for x in os.environ['IDS'].split(';') if x.strip()]:
+              try:
+                  url = best_image(nid, os.environ['SIZE'])
+                  p = download(url, '/tmp/dl')
+                  im = Image.open(p).convert('RGB')
+                  if max(im.size) > 4096: im.thumbnail((4096, 4096))
+                  out = f'../../nasa/{nid}.jpg'
+                  im.save(out, quality=90)
+                  print(nid, url, im.size, os.path.getsize(out))
+              except Exception as e:
+                  print(nid, 'ERROR', e)
+          PY
+          cd ../..
+          rm -rf tools
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nasa && git commit -m "NASA images: ${IDS}" && git push origin HEAD:nasa-assets
